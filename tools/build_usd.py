@@ -62,6 +62,7 @@ args_cli = parser.parse_args()
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
+import math  # noqa: E402
 import shutil  # noqa: E402
 import sys  # noqa: E402
 import xml.etree.ElementTree as ET  # noqa: E402
@@ -70,7 +71,7 @@ from pathlib import Path  # noqa: E402
 
 import yaml  # noqa: E402
 from isaaclab.sim.converters import UrdfConverter, UrdfConverterCfg  # noqa: E402
-from pxr import Usd, UsdPhysics  # noqa: E402
+from pxr import Gf, Usd, UsdPhysics  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 RL_DIR = ROOT / "generated" / "rl"
@@ -96,9 +97,41 @@ DRIVE_DAMPING = 1.0
 #     500 / 1.0 (pinned here)               0.009 rad         0.012 rad
 #
 # Re-measure with the same sweep if the value is ever changed; "the API is
-# applied" is not evidence that the joints actually track.
-MIMIC_NATURAL_FREQUENCY = 500.0
+# applied" is not evidence that the joints actually track. Worst tracking error
+# over all 12 pairs, dt 1/120, no contact:
+#
+#     naturalFrequency   omega*dt   leader 0.2 rad   leader 0.8 rad
+#             25 (imp.)      0.21        0.360            1.192
+#             50             0.42        0.244            0.876
+#            100             0.83        0.122            0.344
+#            200             1.67        0.045            0.078
+#            500             4.17        0.009            0.012
+#
+# 200 is the stiffest value inside the omega*dt < 2 bound a downstream scene
+# asked for after a solver blow-up. That blow-up was the limit conflict below,
+# not integrator instability - the same report measured that shrinking the
+# physics dt 8x (omega*dt 4.2 -> 0.52) did NOT stop the divergence. 500 tracks
+# 6x tighter and is worth re-testing once the widened limits are in.
+MIMIC_NATURAL_FREQUENCY = 200.0
 MIMIC_DAMPING_RATIO = 1.0
+
+# How far contact may push a DRIVEN joint past its own limit. The dependent
+# joint's limit is widened to cover the mimic demand over that whole excursion.
+#
+# The importer sizes a dependent limit as leader_range * multiplier plus a 20%
+# buffer, which for a short-range leader is almost nothing: r_hj_thumb_2 spans
+# 0.475 rad, so r_hj_thumb_3 came out [-0.108, +0.651]. Measured downstream in
+# a 1024-env grasp scene, contact pushed r_hj_thumb_2 to -0.247 rad (its lower
+# limit is 0); the mimic then demanded -0.282 rad of thumb_3, outside its
+# limit, so the limit constraint and the mimic constraint became jointly
+# unsatisfiable. The solver injects energy to satisfy both and the scene
+# explodes - 400 of 1024 envs were in that state at once, |qd| 292 rad/s on
+# the dependent joints while the arm stayed at 3.1.
+#
+# Widening costs nothing physically: the mimic constraint is what decides where
+# a dependent joint sits, and its limit is only a backstop. 0.5 rad covers ~2x
+# the worst overshoot measured so far.
+MIMIC_LEADER_OVERSHOOT = 0.5
 
 
 @dataclass(frozen=True)
@@ -310,11 +343,59 @@ def convert(asset: str) -> Path:
     apply_collision_filters(usd_path, urdf_path, asset,
                             [tuple(p) for p in manifest["self_collision_filtered_pairs"]])
     patch_visuals_prims(out_dir, asset, urdf_path)
+    shrink_massless_frames(usd_path, urdf_path, asset)
     # make generated/rl/<asset>/ a self-contained bundle: usd layers + the
     # exact urdf/manifest the usd was built from
     for source in (urdf_path, manifest_path):
         shutil.copyfile(source, out_dir / source.name)
     return usd_path
+
+
+def shrink_massless_frames(usd_path: Path, urdf_path: Path, asset: str) -> None:
+    """URDF 에 <inertial> 이 없는 링크의 질량을 0 으로 눌러 **유령 1 kg** 을 없앤다.
+
+    ★09.02 실측 사고. URDF 에서 `<inertial>` 이 없는 링크는 "질량 없는 좌표 프레임"인데,
+    `merge_fixed_joints=False`(fingertip 센서·palm_body 이름 보존을 위해 의도적)로
+    임포트하면 그 프레임도 각각 rigid body 가 되고, 질량이 안 적혀 있으면 PhysX 가
+    **기본값 1.0 kg** 을 붙인다. 하필 손끝이라 중력 모멘트가 통째로 바뀌었다:
+
+      l_hl_gripper_tcp 1.0 kg · r_hl_mount/palm_alias/palm_ee 각 1.0 kg = 총 4 kg
+      → sim 좌팔 정적 처짐 j7 **11.07°** vs 실기 4.2°(같은 게인 70/60/10). 2.6배.
+
+    `verify_contract` 는 <inertial> 이 **있는** 링크만 검사하므로 정확히 반대 집합인
+    이 유령들을 못 잡았다.
+
+    ★★질량 **0 은 소용없다**(09.02 실측): USD 에 0.0 이 적혀 있어도 PhysX 는 강체에
+    질량 0 을 허용하지 않아 **기본값 1.0 kg** 으로 대체한다. 그래서 아주 작은 양수를
+    넣는다. 1e-4 kg 이면 손끝에서 0.0001×9.81×0.12 ≈ 0.00012 N·m — 실기 j7 중력토크
+    0.76 N·m 의 0.02% 라 무시할 수 있고, 솔버도 0 질량 강체 문제를 겪지 않는다.
+    """
+    massless = [link.get("name") for link in ET.parse(urdf_path).getroot().findall("link")
+                if link.find("inertial") is None and link.get("name")]
+    if not massless:
+        return
+    stage = Usd.Stage.Open(str(usd_path))
+    fixed, missing = [], []
+    for name in massless:
+        prim = next((pr for pr in stage.Traverse() if pr.GetName() == name
+                     and pr.HasAPI(UsdPhysics.RigidBodyAPI)), None)
+        if prim is None:
+            missing.append(name)
+            continue
+        api = UsdPhysics.MassAPI.Apply(prim)
+        api.CreateMassAttr().Set(1e-4)
+        api.CreateDiagonalInertiaAttr().Set(Gf.Vec3f(1e-4, 1e-4, 1e-4))
+        fixed.append(name)
+    stage.GetRootLayer().Save()
+    print(f"[{asset}] 무질량 프레임 {len(fixed)}개 질량 1e-4 kg 로 고정: {fixed}"
+          + (f" (강체 아님·건너뜀: {missing})" if missing else ""))
+    # 재검증 — 여기서 실패하면 유령이 남은 것이다
+    check = Usd.Stage.Open(str(usd_path))
+    left = [pr.GetName() for pr in check.Traverse()
+            if pr.GetName() in set(fixed) and pr.HasAPI(UsdPhysics.MassAPI)
+            and (UsdPhysics.MassAPI(pr).GetMassAttr().Get() or 1.0) > 1e-3]
+    if left:
+        raise SystemExit(f"[{asset}] 유령 질량이 남았다: {left}")
 
 
 def patch_visuals_prims(out_dir: Path, asset: str, urdf_path: Path) -> None:
@@ -353,7 +434,29 @@ def urdf_mimic_joints(urdf_path: Path) -> dict[str, tuple[str, float]]:
     return joints
 
 
-def patch_one_mimic_joint(prim, name: str, leader: str, multiplier: float,
+def widen_dependent_limit(prim, leader_prim, multiplier: float, touched_layers: set) -> None:
+    """Grow a dependent joint's limit to cover the mimic demand under overshoot.
+
+    USD revolute limits are in degrees, and the mimic multiplier is unitless,
+    so the whole computation stays in degrees. Limits are only ever widened -
+    a joint whose importer limit is already generous keeps it.
+    """
+    reach = [
+        value * multiplier
+        for value in (leader_prim.GetAttribute("physics:lowerLimit").Get()
+                      - math.degrees(MIMIC_LEADER_OVERSHOOT),
+                      leader_prim.GetAttribute("physics:upperLimit").Get()
+                      + math.degrees(MIMIC_LEADER_OVERSHOOT))
+    ]
+    for attr_name, bound, pick in (("physics:lowerLimit", min(reach), min),
+                                   ("physics:upperLimit", max(reach), max)):
+        attr = prim.GetAttribute(attr_name)
+        attr.Set(pick(attr.Get(), bound))
+        touched_layers.update(
+            spec.layer for spec in attr.GetPropertyStack(Usd.TimeCode.Default()))
+
+
+def patch_one_mimic_joint(prim, leader_prim, name: str, leader: str, multiplier: float,
                           touched_layers: set) -> list[str]:
     """Stiffen one mimic joint and return what is wrong with it, if anything."""
     if prim is None:
@@ -382,6 +485,11 @@ def patch_one_mimic_joint(prim, name: str, leader: str, multiplier: float,
         attr.Set(value)
         touched_layers.update(
             spec.layer for spec in attr.GetPropertyStack(Usd.TimeCode.Default()))
+
+    if leader_prim is None:
+        problems.append(f"{name}: leader {leader} absent, cannot size its limit")
+    else:
+        widen_dependent_limit(prim, leader_prim, multiplier, touched_layers)
     return problems
 
 
@@ -413,9 +521,13 @@ def patch_and_verify_mimic_joints(usd_path: Path, asset: str, urdf_path: Path) -
 
     problems = []
     touched_layers = set()
-    for name, (leader, multiplier) in sorted(mimics.items()):
+    # Mimic chains: RH56F1's thumb_4 follows thumb_3, which itself follows
+    # thumb_2. A joint that is someone's leader has to be widened before the
+    # joint that is sized from it, or the second one is sized from a stale limit.
+    leaders = {leader for leader, _ in mimics.values()}
+    for name, (leader, multiplier) in sorted(mimics.items(), key=lambda kv: (kv[0] not in leaders, kv[0])):
         problems.extend(patch_one_mimic_joint(
-            joints.get(name), name, leader, multiplier, touched_layers))
+            joints.get(name), joints.get(leader), name, leader, multiplier, touched_layers))
 
     for layer in touched_layers:
         layer.Save()
