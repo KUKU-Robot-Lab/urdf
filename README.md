@@ -84,6 +84,51 @@ RL-only canonical outputs.
 
 Use these for training.
 
+## ⚠ URDF 무질량 프레임 — PhysX 유령 1 kg (2026-09-02 실측)
+
+**새 자산을 만들 때 반드시 확인할 것.**
+
+URDF 에서 `<inertial>` 이 없는 링크는 "질량 없는 좌표 프레임"이다. 그런데 USD 변환은
+`merge_fixed_joints=False` 로 한다(fingertip 접촉센서와 `palm_body` 이름을 보존해야 하고,
+병합하면 바디 20개가 사라져 env 가 부팅에서 죽는다 — `tools/build_usd.py` 주석 참조).
+그래서 그 프레임들도 **각각 rigid body 가 되고, 질량이 없으면 PhysX 가 기본값 1.0 kg 을
+붙인다.**
+
+실제 피해 (`openarm_tesollo_sensor_rl`):
+
+| 유령 링크 | 런타임 질량 |
+|---|---|
+| `l_hl_gripper_tcp` | 1.0 kg |
+| `r_hl_mount` · `r_hl_palm_alias` · `r_hl_palm_ee` | 각 1.0 kg |
+
+손끝·손바닥이라 중력 모멘트가 통째로 바뀌어, 같은 게인(70/70/70/60/10/10/10)에서
+**sim 좌팔 정적 처짐 j7 11.07° vs 실기 4.2°** (2.6배). sim2real 이 몇 주간 어긋났다.
+양팔 tesollo 자산(`*_bi_rl`, `*_bi_s_rl`)은 손마다 3개씩 **총 6 kg** 이었다.
+
+**세 가지 함정**
+
+1. **USD 에 질량 0 을 적어도 소용없다.** 이미 `0.0` 이 적혀 있었는데 PhysX 가 강체의
+   0 질량을 거부하고 1.0 kg 으로 대체했다. → **아주 작은 양수**(1e-4 kg)를 써야 한다.
+2. **USD 값만 보면 속는다.** 반드시 런타임에서 확인할 것:
+   `robot.root_physx_view.get_masses()` (러너 `mass` 명령이 URDF 와 나란히 찍는다).
+3. **바디를 지우거나 merge 하지 말 것.** `body_names` 순서가 바뀌어 접촉센서·fabric
+   바디맵·충돌필터가 조용히 어긋난다.
+
+**도구**
+
+```bash
+# 새 빌드는 자동 처리됨 (build_usd.py: shrink_massless_frames)
+IsaacLab/isaaclab.sh -p tools/build_usd.py <asset> --sync-hdgp
+
+# 이미 만들어진 자산을 고칠 때 (재빌드는 임포터 드리프트 위험이 있어 비권장)
+IsaacLab/isaaclab.sh -p tools/patch_ghost_masses.py \
+    --usd  <hdgp/assets/robot/<dir>/<asset>.usd> \
+    --urdf <urdf/generated/rl/<asset>.urdf> [--dry-run]
+```
+
+`verify_contract` 는 `<inertial>` 이 **있는** 링크만 검사하므로 정확히 반대 집합인
+이 유령들을 못 잡는다 — 그래서 별도 처리가 필요하다.
+
 ### `previews/`
 
 Scratch/debug URDF files for visual inspection.
