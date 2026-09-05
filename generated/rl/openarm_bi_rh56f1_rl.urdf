@@ -1502,58 +1502,58 @@
   </link>
   <link name="head_base">
     <inertial>
-      <origin xyz="0.003423 -0.000003 0.003366" rpy="0 0 0" />
-      <mass value="0.109629" />
-      <inertia ixx="4.381646e-05" ixy="0" ixz="0" iyy="7.657038e-05" iyz="0" izz="8.818679e-05" />
+      <origin xyz="0.007133 0.000007 0.009363" rpy="0 0 0" />
+      <mass value="0.063863" />
+      <inertia ixx="2.536401e-05" ixy="-2.286778e-09" ixz="-5.559693e-06" iyy="4.010655e-05" iyz="-1.190024e-08" izz="4.044524e-05" />
     </inertial>
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="file:///home/user/rl_ws/urdf/vendor/head_realsense_d435i/meshes/visual/head_base.obj" scale="0.001 0.001 0.001" />
+        <mesh filename="file:///home/user/rl_ws/urdf/vendor/head_v1/meshes/visual/head_base.obj" scale="1 1 1" />
       </geometry>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="file:///home/user/rl_ws/urdf/vendor/head_realsense_d435i/meshes/collision/head_base.stl" scale="0.001 0.001 0.001" />
+        <mesh filename="file:///home/user/rl_ws/urdf/vendor/head_v1/meshes/collision/head_base.stl" scale="1 1 1" />
       </geometry>
     </collision>
   </link>
   <link name="head_mid">
     <inertial>
-      <origin xyz="-0.000004 0.000202 0.019222" rpy="0 0 0" />
-      <mass value="0.017073" />
-      <inertia ixx="2.817369e-06" ixy="0" ixz="0" iyy="2.429180e-06" iyz="0" izz="1.447213e-06" />
+      <origin xyz="0.000011 -0.000172 0.019373" rpy="0 0 0" />
+      <mass value="0.024281" />
+      <inertia ixx="5.591568e-06" ixy="-7.512955e-10" ixz="-2.098648e-10" iyy="5.311169e-06" iyz="3.032467e-09" izz="1.777183e-06" />
     </inertial>
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="file:///home/user/rl_ws/urdf/vendor/head_realsense_d435i/meshes/visual/head_mid.obj" scale="0.001 0.001 0.001" />
+        <mesh filename="file:///home/user/rl_ws/urdf/vendor/head_v1/meshes/visual/head_mid.obj" scale="1 1 1" />
       </geometry>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="file:///home/user/rl_ws/urdf/vendor/head_realsense_d435i/meshes/collision/head_mid.stl" scale="0.001 0.001 0.001" />
+        <mesh filename="file:///home/user/rl_ws/urdf/vendor/head_v1/meshes/collision/head_mid.stl" scale="1 1 1" />
       </geometry>
     </collision>
   </link>
   <link name="head_camera">
     <inertial>
-      <origin xyz="-0.000717 0.014670 0.032665" rpy="0 0 0" />
-      <mass value="0.065101" />
-      <inertia ixx="3.928919e-05" ixy="0" ixz="0" iyy="1.017067e-05" iyz="0" izz="3.748699e-05" />
+      <origin xyz="-0.000306 0.011751 0.031655" rpy="0 0 0" />
+      <mass value="0.068074" />
+      <inertia ixx="4.199895e-05" ixy="-1.228978e-07" ixz="-4.176987e-07" iyy="1.238142e-05" iyz="-7.599836e-08" izz="3.826488e-05" />
     </inertial>
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="file:///home/user/rl_ws/urdf/vendor/head_realsense_d435i/meshes/visual/head_camera.obj" scale="0.001 0.001 0.001" />
+        <mesh filename="file:///home/user/rl_ws/urdf/vendor/head_v1/meshes/visual/head_camera.obj" scale="1 1 1" />
       </geometry>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="file:///home/user/rl_ws/urdf/vendor/head_realsense_d435i/meshes/collision/head_camera.stl" scale="0.001 0.001 0.001" />
+        <mesh filename="file:///home/user/rl_ws/urdf/vendor/head_v1/meshes/collision/head_camera.stl" scale="1 1 1" />
       </geometry>
     </collision>
   </link>
@@ -2037,15 +2037,15 @@
   <joint name="head_j_pan" type="revolute">
     <parent link="head_base" />
     <child link="head_mid" />
-    <origin xyz="0.0225 0 0.0385" rpy="0 0 0" />
+    <origin xyz="0.022500 0.000034 0.035603" rpy="0 0 0" />
     <axis xyz="0 0 -1" />
-    <limit lower="-1.5708" upper="1.5708" effort="1.0" velocity="6.0" />
+    <limit lower="-1.570796" upper="1.570796" effort="1.0" velocity="6.0" />
     <dynamics damping="0.02" friction="0.0" />
   </joint>
   <joint name="head_j_tilt" type="revolute">
     <parent link="head_mid" />
     <child link="head_camera" />
-    <origin xyz="0 -0.0145 0.0275" rpy="0 0 0" />
+    <origin xyz="0.000000 -0.011580 0.030400" rpy="0 0 0" />
     <axis xyz="0 1 0" />
     <limit lower="-1.570796" upper="1.570796" effort="1.0" velocity="6.0" />
     <dynamics damping="0.02" friction="0.0" />
@@ -2053,6 +2053,6 @@
   <joint name="head_j_cam_view" type="fixed">
     <parent link="head_camera" />
     <child link="head_cam_view" />
-    <origin xyz="0.0147 0.0145 0.0365" rpy="0 0 0" />
+    <origin xyz="0.0115 9.6e-05 0.036327" rpy="0 0 0" />
   </joint>
 </robot>

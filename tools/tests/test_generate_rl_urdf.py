@@ -18,9 +18,13 @@ RL_NAMES = list(gen.SOURCES.keys())
 
 
 @pytest.fixture(scope="session", autouse=True)
-def generated_outputs() -> None:
+def generated_outputs(tmp_path_factory) -> None:
     # The audit is exercised separately in test_audit_self_collision.py;
-    # skipping it here keeps the rest of the suite fast.
+    # skipping it here keeps the rest of the suite fast. ★Generate into a temp
+    # dir: writing --skip-audit outputs into generated/rl/ silently strips the
+    # `self_collision_filtered_pairs` block from the real manifests, and the next
+    # USD build then refuses them (bit twice on 2026-09-05).
+    gen.OUT_DIR = tmp_path_factory.mktemp("generated_rl")
     assert gen.main(["--skip-audit"]) == 0
 
 
@@ -77,7 +81,9 @@ def test_body_link_uses_cropped_meshes(name: str) -> None:
         assert mesh is not None
         filename = mesh.attrib["filename"]
         assert filename.startswith("file://")
-        assert "_cut.stl" in filename
+        # plate-cropped, vendor head housing removed, pillar cut at the head base
+        # plate underside (mm in the name)
+        assert filename.endswith(f"_cut_nohousing_top{round(gen.BODY_TOP_CROP_Z * 1000)}.stl")
         assert Path(filename[len("file://") :]).is_file()
     inertial = body.find("inertial")
     assert inertial is not None
@@ -89,6 +95,59 @@ def test_cropped_collision_mesh_has_no_geometry_below_origin() -> None:
     zmin, zmax = stl_z_range(gen.ROOT / "generated" / "rl" / "meshes" / "body_link0_symp_cut.stl")
     assert zmin >= -1e-3
     assert zmax == pytest.approx(765.0, abs=0.5)
+
+
+def test_body_housing_removed_and_pillar_cut_at_head_base_plate() -> None:
+    """The vendor head housing (x up to +65 mm around the pillar) is gone and the
+    60x60 pillar ends at the head_v1 base plate underside (mount 0.750 - plate
+    0.020 = 0.730), so body_link and the head links cannot interpenetrate at
+    rest (the old [body_link, head_mid] allowlist entry)."""
+    import trimesh
+
+    assert gen.BODY_TOP_CROP_Z == pytest.approx(0.750 - 0.020)
+    top_mm = round(gen.BODY_TOP_CROP_Z * 1000)
+    for stem in ("body_link0_symp_cut", "body_link0_visual_cut"):
+        mesh = trimesh.load(gen.ROOT / "generated" / "rl" / "meshes" / f"{stem}_nohousing_top{top_mm}.stl",
+                            force="mesh")
+        (_, _, zmin), (_, _, zmax) = mesh.bounds
+        assert zmin >= -1e-3 and zmax == pytest.approx(top_mm, abs=0.01)
+        # above the housing band only the pillar footprint (60x60 mm) remains
+        upper = mesh.vertices[mesh.vertices[:, 2] > 620.0]
+        assert upper.size and abs(upper[:, 0]).max() <= 30.5 and abs(upper[:, 1]).max() <= 30.5
+
+
+@pytest.mark.parametrize("name", RL_NAMES)
+def test_every_link_has_inertial(name: str) -> None:
+    """Massless frames get a token 1e-5 kg in the URDF (PhysX would give a
+    massless body 1.0 kg, and 0 kg is rejected -> also 1.0 kg; a zero mass also
+    breaks the PD models built on the same URDF)."""
+    root = load_urdf(name)
+    assert gen.TOKEN_MASS_KG == pytest.approx(1e-5)
+    for link in root.findall("link"):
+        inertial = link.find("inertial")
+        assert inertial is not None, link.attrib["name"]
+        mass = float(inertial.find("mass").attrib["value"])
+        assert mass >= gen.TOKEN_MASS_KG
+
+
+def hand_mass_kg(root: ET.Element, side: str) -> float:
+    return sum(float(l.find("inertial/mass").attrib["value"]) for l in root.findall("link")
+               if l.attrib["name"].startswith(f"{side}_hl_"))
+
+
+def test_dg5f_hand_mass_matches_measurement() -> None:
+    """DG-5F: vendor 1.685 kg scaled to the user's 1.763 kg scale measurement."""
+    root = load_urdf("openarm_dg5f-m_bi")
+    for side in ("r", "l"):
+        assert hand_mass_kg(root, side) == pytest.approx(1.763, abs=1e-3)
+
+
+@pytest.mark.parametrize("name", [n for n in RL_NAMES if n not in gen.HAND_MASS_TARGET_KG])
+def test_other_hands_keep_vendor_mass(name: str) -> None:
+    root = load_urdf(name)
+    vendor = {"openarm_dg5f-s_bi": 1.2084, "openarm_rh56f1_bi": 0.7077, "openarm_gripper_bi": 0.4222}
+    for side in ("r", "l"):
+        assert hand_mass_kg(root, side) == pytest.approx(vendor[name], abs=2e-3)
 
 
 @pytest.mark.parametrize("name", RL_NAMES)
@@ -103,7 +162,7 @@ def test_head_attached(name: str) -> None:
     parent, child = mount.find("parent"), mount.find("child")
     assert parent is not None and parent.attrib["link"] == "body_link"
     assert child is not None and child.attrib["link"] == "head_base"
-    assert origin_xyz(mount) == pytest.approx((0.0, 0.0, 0.750))
+    assert origin_xyz(mount) == pytest.approx((0.0, 0.0, gen.HEAD_MOUNT_Z))
 
     for joint_name in ("head_j_pan", "head_j_tilt"):
         assert joints[joint_name].attrib["type"] == "revolute"
@@ -160,10 +219,39 @@ def test_head_mesh_paths_resolve(name: str) -> None:
             assert Path(filename[len("file://") :]).is_file()
 
 
-TESOLLO_NAMES = [name for name in RL_NAMES if "tesollo" in name]
+TESOLLO_NAMES = [name for name in RL_NAMES if "dg5f" in name]
+# assets whose link7 carries a replacement hand (the stock gripper keeps the stock link7)
+HAND_MOUNT_NAMES = [name for name in RL_NAMES if "gripper" not in name]
 
 
 @pytest.mark.parametrize("name", RL_NAMES)
+def test_manifest_collider_policy(name: str) -> None:
+    """OpenArm links -> convex hull, dexterous hand links -> decomposition (09.05)."""
+    manifest = load_manifest(name)
+    policy = manifest["collision_approximation"]
+    assert policy["default"] == "convex_decomposition"
+    hull = set(policy["convex_hull_links"])
+    assert {"body_link", "r_al_1", "l_al_7", "head_base"} <= hull
+    assert all(link.startswith(gen.OPENARM_HULL_LINK_PREFIXES) for link in hull)
+    if "gripper" in name:
+        assert {"r_hl_gripper_base", "l_hl_gripper_left_finger"} <= hull
+    else:
+        assert not any("_hl_" in link for link in hull)
+    assert manifest["asset"] == f"{name}_rl"
+
+
+def test_gripper_asset_action_and_mimic() -> None:
+    manifest = load_manifest("openarm_gripper_bi")
+    assert manifest["control_joint_order"] == (
+        [f"r_aj_{i}" for i in range(1, 8)] + ["r_hj_gripper_1"]
+        + [f"l_aj_{i}" for i in range(1, 8)] + ["l_hj_gripper_1"])
+    joints = joints_by_name(load_urdf("openarm_gripper_bi"))
+    for side in ("r", "l"):
+        mimic = joints[f"{side}_hj_gripper_2"].find("mimic")
+        assert mimic is not None and mimic.attrib["joint"] == f"{side}_hj_gripper_1"
+
+
+@pytest.mark.parametrize("name", HAND_MOUNT_NAMES)
 def test_arm_link7_meshes_support_hand_mount(name: str) -> None:
     """A link7 carrying a replacement hand must use the cropped visual mesh
     (stock-gripper motor removed) and the bolt-free flange-cut collision mesh

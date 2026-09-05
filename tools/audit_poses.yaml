@@ -12,7 +12,11 @@
 # zero pose plus all registered poses, FAILs on raw penetration at any of
 # them, and unions the WARN pairs into the manifest's
 # self_collision_filtered_pairs.
-openarm_tesollo_sensor_rl:
+# 2026-09-05: the left-gripper homes were derived on the retired
+# openarm_tesollo_sensor_rl (left arm + stock gripper); the same arm/gripper
+# chain now lives in openarm_gripper_bi_rl (both arms), so they are re-keyed
+# here. The right side is covered by the mirror symmetrization.
+openarm_gripper_bi_rl:
   # hdgp gripper/left/grasp_sensor LEFT_ARM_HOME_JOINT_POS (probe-derived,
   # 0.5 rad joint-limit margin home)
   left_gripper_home:

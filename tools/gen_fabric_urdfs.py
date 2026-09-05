@@ -8,20 +8,28 @@ fabric_params YAMLs. Historically these URDFs were hand-regenerated inside
 hdgp with four separate scripts every time an RL asset changed; this module
 consolidates them so `generated/rl/*_rl.urdf` is the single kinematic source.
 
-Variants (directory name == file name == robot name, the Fabrics convention):
+Variants (directory name == file name == robot name, the Fabrics convention),
+one or two per RL asset of the 2026-09-05 line-up (generate_rl_urdf.SOURCES):
 
-- openarm_tesollo_bi_s            right arm+hand of openarm_tesollo_bi_s_rl
-- openarm_tesollo_bi_s_left       left  arm+hand of openarm_tesollo_bi_s_rl
-- openarm_tesollo_sensor_left_gripper
-                                  left arm of openarm_tesollo_sensor_rl with
-                                  the hand frozen (cspace = 7); palm = gripper
-                                  TCP; frozen frames approximate the gripper
-                                  volume for collision spheres
-- openarm_rh56f1                  both arms of openarm_bi_rh56f1_rl
-                                  (arm 7 + drive 6 per side, mimic -> fixed)
+- openarm_dg5f-m_bi_right / _left    one arm + DG-5F hand of openarm_dg5f-m_bi_rl
+- openarm_dg5f-s_bi_right / _left    one arm + DG-5F-S hand of openarm_dg5f-s_bi_rl
+- openarm_gripper_bi_right / _left   one arm of openarm_gripper_bi_rl with the
+                                     (frozen, template) hand frames; cspace = 7;
+                                     palm = gripper TCP
+- openarm_rh56f1_bi                  both arms of openarm_rh56f1_bi_rl
+                                     (arm 7 + drive 6 per side, mimic -> fixed)
+
+The legacy variants (openarm_tesollo_bi_s, openarm_tesollo_bi_s_left,
+openarm_tesollo_sensor_left_gripper, openarm_tesollo_sensor_right,
+openarm_rh56f1) are no longer generated; their hdgp copies stay frozen.
 
 The tesollo/gripper variants patch structural templates vendored in
-eef/fabric_templates/ (fabric-only frames and sphere layouts live there);
+eef/fabric_templates/ (fabric-only frames and sphere layouts live there):
+openarm_tesollo_sensor_right (DG-5F right), openarm_dg5f_left (DG-5F left,
+promoted from the legacy hdgp openarm_tesollo_left URDF: mirrored sphere
+layout), openarm_tesollo_bi_s / _left (DG-5F-S), and
+openarm_tesollo_sensor_left_gripper (stock gripper, frames are palm-local and
+side-symmetric so one template serves both arms);
 every kinematic quantity - arm joints (including the composite world->link1
 transform), hand joints, palm offset, fingertip offsets - is overwritten from
 the RL URDF, so the historical +8mm arm-base offset of the legacy fabric
@@ -50,6 +58,11 @@ HDGP_FABRIC_DIR = ROOT.parent / "hdgp" / "source" / "FABRICS" / "src" / "fabrics
 FINGERS = ("thumb", "index", "middle", "ring", "pinky")
 FK_TOLERANCE_M = 2e-4
 FK_TRIALS = 20
+# Fabric-only frames (palm helpers, collision spheres, palm_link, ...) are not
+# physical parts; the fabric URDF is also used as a PD-controlled model where a
+# zero mass breaks the dynamics, so they carry a token 1e-5 kg (user, 2026-09-05).
+HELPER_MASS_KG = 1e-5
+HELPER_INERTIA = 1e-7
 
 # palm helper frames are fabric-code conventions (±0.25m axis points), not
 # geometry - never derived from the RL URDF (see hdgp generate_left_fabric_urdf).
@@ -91,6 +104,83 @@ def make_transform(xyz: np.ndarray, rot: np.ndarray) -> np.ndarray:
     transform[:3, :3] = rot
     transform[:3, 3] = xyz
     return transform
+
+
+def parse_inertials(path: Path) -> dict[str, dict]:
+    """link -> {mass, com, inertia(3x3)} for every link of ``path`` that has one."""
+    out: dict[str, dict] = {}
+    for link in ET.parse(path).getroot().iter("link"):
+        inertial = link.find("inertial")
+        if inertial is None:
+            continue
+        origin, inertia = inertial.find("origin"), inertial.find("inertia")
+        xyz = [float(v) for v in ((origin.get("xyz") if origin is not None else None) or "0 0 0").split()]
+        rpy = [float(v) for v in ((origin.get("rpy") if origin is not None else None) or "0 0 0").split()]
+        tensor = np.zeros((3, 3))
+        if inertia is not None:
+            g = lambda k: float(inertia.get(k) or 0.0)  # noqa: E731
+            tensor = np.array([[g("ixx"), g("ixy"), g("ixz")], [g("ixy"), g("iyy"), g("iyz")], [g("ixz"), g("iyz"), g("izz")]])
+        rot = rpy_to_mat(*rpy)
+        out[link.get("name") or ""] = {"mass": float(inertial.find("mass").get("value")),
+                                       "com": np.array(xyz), "inertia": rot @ tensor @ rot.T}
+    return out
+
+
+def lump_inertials(rl: dict, inertials: dict, links: list[str], ref_link: str) -> dict:
+    """Combine several RL links into one inertial expressed in ``ref_link``'s frame (q=0)."""
+    ref_inv = np.linalg.inv(fk_link(rl, ref_link, {}))
+    mass, first = 0.0, np.zeros(3)
+    parts = []
+    for link in links:
+        if link not in inertials:
+            continue
+        world = ref_inv @ fk_link(rl, link, {})
+        com = world[:3, :3] @ inertials[link]["com"] + world[:3, 3]
+        inertia = world[:3, :3] @ inertials[link]["inertia"] @ world[:3, :3].T
+        parts.append((inertials[link]["mass"], com, inertia))
+        mass += inertials[link]["mass"]
+        first += inertials[link]["mass"] * com
+    if mass <= 0:
+        raise ValueError(f"nothing to lump onto {ref_link}: {links}")
+    com = first / mass
+    tensor = np.zeros((3, 3))
+    for m, c, inertia in parts:
+        d = c - com
+        tensor += inertia + m * (np.dot(d, d) * np.eye(3) - np.outer(d, d))
+    return {"mass": mass, "com": com, "inertia": tensor}
+
+
+def set_inertial(link: ET.Element, data: dict) -> None:
+    inertial = link.find("inertial")
+    if inertial is None:
+        inertial = ET.SubElement(link, "inertial")
+    for child in list(inertial):
+        inertial.remove(child)
+    ET.SubElement(inertial, "origin", {"xyz": fmt(data["com"]), "rpy": "0 0 0"})
+    ET.SubElement(inertial, "mass", {"value": f"{data['mass']:.9g}"})
+    i = data["inertia"]
+    ET.SubElement(inertial, "inertia", {"ixx": f"{i[0, 0]:.6g}", "ixy": f"{i[0, 1]:.6g}", "ixz": f"{i[0, 2]:.6g}",
+                                        "iyy": f"{i[1, 1]:.6g}", "iyz": f"{i[1, 2]:.6g}", "izz": f"{i[2, 2]:.6g}"})
+
+
+def helper_inertial() -> dict:
+    return {"mass": HELPER_MASS_KG, "com": np.zeros(3), "inertia": np.eye(3) * HELPER_INERTIA}
+
+
+def sync_inertials(root: ET.Element, rl: dict, inertials: dict, link_map: dict[str, str],
+                   lumps: dict[str, tuple[list[str], str]]) -> None:
+    """Every fabric link gets the RL asset's inertial (``link_map``: fabric -> RL link),
+    a lumped one (``lumps``: fabric link -> (RL links, RL reference link)), or the
+    helper token. Kinematics are untouched."""
+    for link in root.iter("link"):
+        name = link.get("name") or ""
+        if name in lumps:
+            links, ref = lumps[name]
+            set_inertial(link, lump_inertials(rl, inertials, links, ref))
+        elif name in link_map and link_map[name] in inertials:
+            set_inertial(link, inertials[link_map[name]])
+        else:
+            set_inertial(link, helper_inertial())
 
 
 def parse_urdf(path: Path) -> dict[str, dict]:
@@ -214,14 +304,15 @@ def write_variant(root: ET.Element, name: str, source_note: str) -> Path:
     return path
 
 
-def write_manifest(name: str, source_rl: Path, urdf_path: Path) -> Path:
+def write_manifest(name: str, source_rl: Path, urdf_path: Path,
+                   palm_line: str = "palm_frame: palm_link\n") -> Path:
     joints = parse_urdf(urdf_path)
     cspace = [n for n, j in joints.items() if j["type"] == "revolute"]
     lines = [
         f"robot_name: {name}\n",
         f"source_rl_urdf: {source_rl.relative_to(ROOT)}\n",
         f"generated_urdf: {urdf_path.relative_to(ROOT)}\n",
-        "palm_frame: palm_link\n" if name != "openarm_rh56f1" else "palm_frames: [r_hl_palm_sensor, l_hl_palm_sensor]\n",
+        palm_line,
         f"cspace_dim: {len(cspace)}\n",
         "cspace_joint_order:  # URDF document order == fabric cspace order\n",
     ]
@@ -271,10 +362,10 @@ def verify_tesollo(urdf_path: Path, rl: dict, side: str) -> float:
     return _fk_compare(parse_urdf(urdf_path), rl, tesollo_joint_map(side), frame_pairs, seed=7)
 
 
-def verify_gripper(urdf_path: Path, rl: dict) -> float:
-    joint_map = {f"openarm_right_joint{i}": f"l_aj_{i}" for i in range(1, 8)}
+def verify_gripper(urdf_path: Path, rl: dict, side: str) -> float:
+    joint_map = {f"openarm_right_joint{i}": f"{side}_aj_{i}" for i in range(1, 8)}
     return _fk_compare(parse_urdf(urdf_path), rl, joint_map,
-                       [("palm_link", "l_hl_gripper_tcp")], seed=11)
+                       [("palm_link", f"{side}_hl_gripper_tcp")], seed=11)
 
 
 def verify_rh56f1(urdf_path: Path, rl: dict) -> float:
@@ -290,6 +381,19 @@ def verify_rh56f1(urdf_path: Path, rl: dict) -> float:
 # ---------------------------------------------------------------------------
 # variant builders
 # ---------------------------------------------------------------------------
+def tesollo_link_map(side: str) -> dict[str, str]:
+    """fabric link -> RL link (arm, finger segments, tips)."""
+    mapping = {f"openarm_right_link{i}": f"{side}_al_{i}" for i in range(1, 8)}
+    for index, finger in enumerate(FINGERS, start=1):
+        for segment in range(1, 5):
+            mapping[f"tesollo_right_rl_dg_{index}_{segment}"] = f"{side}_hl_{finger}_{segment}"
+        mapping[f"rl_dg_{index}_tip"] = f"{side}_hl_{finger}_tip"
+    return mapping
+
+
+PALM_CHAIN = ("mount", "adapter", "base", "palm", "palm_alias", "palm_ee")
+
+
 def build_tesollo(name: str, template: str, rl_asset: str, side: str) -> Path:
     rl_path = RL_DIR / f"{rl_asset}.urdf"
     rl = parse_urdf(rl_path)
@@ -298,6 +402,10 @@ def build_tesollo(name: str, template: str, rl_asset: str, side: str) -> Path:
     patch_arm(joints, rl, side)
     patch_hand(joints, rl, side)
     patch_palm(joints, rl, side)
+    # masses: vendor (and any measured scaling) from the RL URDF; the palm chain
+    # (adapter/base/palm) is lumped onto palm_link (= *_hl_palm_alias frame)
+    sync_inertials(tree.getroot(), rl, parse_inertials(rl_path), tesollo_link_map(side),
+                   {"palm_link": ([f"{side}_hl_{n}" for n in PALM_CHAIN], f"{side}_hl_palm_alias")})
     for helper in PALM_HELPER_JOINTS:  # convention frames must exist untouched
         assert helper in joints, helper
     urdf_path = write_variant(tree.getroot(), name, f"{rl_asset}.urdf ({side} chain)")
@@ -310,18 +418,26 @@ def build_tesollo(name: str, template: str, rl_asset: str, side: str) -> Path:
     return urdf_path
 
 
-def build_gripper(name: str) -> Path:
-    rl_path = RL_DIR / "openarm_tesollo_sensor_rl.urdf"
+GRIPPER_TEMPLATE = "openarm_tesollo_sensor_left_gripper"
+
+
+def build_gripper(name: str, rl_asset: str, side: str) -> Path:
+    rl_path = RL_DIR / f"{rl_asset}.urdf"
     rl = parse_urdf(rl_path)
-    tree = ET.parse(TEMPLATE_DIR / f"{name}.urdf")
+    tree = ET.parse(TEMPLATE_DIR / f"{GRIPPER_TEMPLATE}.urdf")
     joints = joints_by_name(tree.getroot())
-    patch_arm(joints, rl, "l")
+    patch_arm(joints, rl, side)
     # palm_link = gripper TCP: mount + tcp offsets from the RL URDF, no rotation
-    z_tcp = float(rl["l_hj_gripper_mount"]["xyz"][2] + rl["l_hj_gripper_tcp"]["xyz"][2])
+    z_tcp = float(rl[f"{side}_hj_gripper_mount"]["xyz"][2] + rl[f"{side}_hj_gripper_tcp"]["xyz"][2])
     set_origin(joints["palm_link_joint"], (0.0, 0.0, z_tcp), (0.0, 0.0, 0.0))
-    # frozen hand frames (gripper-volume approximation) stay as templated
-    urdf_path = write_variant(tree.getroot(), name, "openarm_tesollo_sensor_rl.urdf (left arm, hand frozen)")
-    error = verify_gripper(urdf_path, rl)
+    # frozen hand frames (gripper-volume approximation) stay as templated; the
+    # gripper's real mass (base + both jaws at q=0) is lumped onto palm_link (TCP)
+    gripper = [f"{side}_hl_gripper_{n}" for n in ("base", "left_finger", "right_finger", "tcp")]
+    sync_inertials(tree.getroot(), rl, parse_inertials(rl_path),
+                   {f"openarm_right_link{i}": f"{side}_al_{i}" for i in range(1, 8)},
+                   {"palm_link": (gripper, f"{side}_hl_gripper_tcp")})
+    urdf_path = write_variant(tree.getroot(), name, f"{rl_asset}.urdf ({side} arm, hand frozen)")
+    error = verify_gripper(urdf_path, rl, side)
     if error > FK_TOLERANCE_M:
         urdf_path.unlink()
         raise SystemExit(f"[{name}] FK gate FAILED: {error * 1000:.3f}mm")
@@ -344,12 +460,9 @@ RH_SPHERE_PARENT = ("thumb_2", "index_1", "middle_1", "ring_1", "pinky_1")
 
 
 def _rh_massless_link(out: ET.Element, name: str) -> None:
+    """Helper token mass; real links are overwritten by sync_inertials afterwards."""
     link = ET.SubElement(out, "link", {"name": name})
-    inertial = ET.SubElement(link, "inertial")
-    ET.SubElement(inertial, "origin", {"xyz": "0 0 0", "rpy": "0 0 0"})
-    ET.SubElement(inertial, "mass", {"value": "0.001"})
-    ET.SubElement(inertial, "inertia", {"ixx": "1e-6", "ixy": "0", "ixz": "0",
-                                        "iyy": "1e-6", "iyz": "0", "izz": "1e-6"})
+    set_inertial(link, helper_inertial())
 
 
 def _rh_copy_joint(out: ET.Element, src: ET.Element, force_type: str) -> None:
@@ -374,8 +487,8 @@ def _rh_copy_joint(out: ET.Element, src: ET.Element, force_type: str) -> None:
         })
 
 
-def build_rh56f1(name: str = "openarm_rh56f1") -> Path:
-    rl_path = RL_DIR / "openarm_bi_rh56f1_rl.urdf"
+def build_rh56f1(name: str, rl_asset: str) -> Path:
+    rl_path = RL_DIR / f"{rl_asset}.urdf"
     src_joints = list(ET.parse(rl_path).getroot().findall("joint"))
     out = ET.Element("robot", {"name": name})
     _rh_massless_link(out, "body_link")
@@ -422,38 +535,48 @@ def build_rh56f1(name: str = "openarm_rh56f1") -> Path:
             ET.SubElement(joint, "parent", {"link": f"{side}_hl_{suffix}"})
             ET.SubElement(joint, "child", {"link": sphere})
 
+    # real links keep the RL asset's (vendor) inertials; ps_*/sphere frames stay tokens
+    real = {l.get("name"): l.get("name") for l in out.findall("link")
+            if not (l.get("name") or "").startswith(("ps_", "r_sphere_", "l_sphere_"))}
+    sync_inertials(out, parse_urdf(rl_path), parse_inertials(rl_path), real, {})
     ET.indent(out, space="  ")
-    urdf_path = write_variant(out, name, "openarm_bi_rh56f1_rl.urdf (both arms, mimic->fixed)")
+    urdf_path = write_variant(out, name, f"{rl_asset}.urdf (both arms, mimic->fixed)")
     error = verify_rh56f1(urdf_path, parse_urdf(rl_path))
     if error > FK_TOLERANCE_M:
         urdf_path.unlink()
         raise SystemExit(f"[{name}] FK gate FAILED: {error * 1000:.3f}mm")
     print(f"[{name}] FK gate ok ({error * 1e6:.1f}um, palm_sensor+tips both sides x{FK_TRIALS})")
-    write_manifest(name, rl_path, urdf_path)
+    write_manifest(name, rl_path, urdf_path,
+                   palm_line="palm_frames: [r_hl_palm_sensor, l_hl_palm_sensor]\n")
     return urdf_path
 
 
+# Templates carry the fabric-only frames (palm helpers, collision spheres); a DG-5F
+# template cannot serve DG-5F-S (segment origins differ by up to 51 mm and the
+# spheres are not patched), and left/right differ in sphere layout.
 VARIANTS = {
-    "openarm_tesollo_bi_s": lambda: build_tesollo(
-        "openarm_tesollo_bi_s", "openarm_tesollo_bi_s", "openarm_tesollo_bi_s_rl", "r"),
-    "openarm_tesollo_bi_s_left": lambda: build_tesollo(
-        "openarm_tesollo_bi_s_left", "openarm_tesollo_bi_s_left", "openarm_tesollo_bi_s_rl", "l"),
-    "openarm_tesollo_sensor_left_gripper": lambda: build_gripper(
-        "openarm_tesollo_sensor_left_gripper"),
-    # DG-5F 계보. 템플릿은 레거시 openarm_tesollo(같은 DG-5F 손 — 손 관절 20/20 이 sensor 와
-    # 동일, palm 오프셋 0.0698 공통)에서 승격했다. bi_s 템플릿은 DG-5FS 라 마디 origin 이
-    # 최대 51mm 다르고 충돌구는 patch 대상이 아니어서 쓸 수 없다.
-    "openarm_tesollo_sensor_right": lambda: build_tesollo(
-        "openarm_tesollo_sensor_right", "openarm_tesollo_sensor_right",
-        "openarm_tesollo_sensor_rl", "r"),
-    "openarm_rh56f1": build_rh56f1,
+    "openarm_dg5f-m_bi_right": lambda: build_tesollo(
+        "openarm_dg5f-m_bi_right", "openarm_tesollo_sensor_right", "openarm_dg5f-m_bi_rl", "r"),
+    "openarm_dg5f-m_bi_left": lambda: build_tesollo(
+        "openarm_dg5f-m_bi_left", "openarm_dg5f_left", "openarm_dg5f-m_bi_rl", "l"),
+    "openarm_dg5f-s_bi_right": lambda: build_tesollo(
+        "openarm_dg5f-s_bi_right", "openarm_tesollo_bi_s", "openarm_dg5f-s_bi_rl", "r"),
+    "openarm_dg5f-s_bi_left": lambda: build_tesollo(
+        "openarm_dg5f-s_bi_left", "openarm_tesollo_bi_s_left", "openarm_dg5f-s_bi_rl", "l"),
+    "openarm_gripper_bi_right": lambda: build_gripper(
+        "openarm_gripper_bi_right", "openarm_gripper_bi_rl", "r"),
+    "openarm_gripper_bi_left": lambda: build_gripper(
+        "openarm_gripper_bi_left", "openarm_gripper_bi_rl", "l"),
+    "openarm_rh56f1_bi": lambda: build_rh56f1("openarm_rh56f1_bi", "openarm_rh56f1_bi_rl"),
 }
 
 
 def sync_hdgp(urdf_path: Path) -> None:
     destination = HDGP_FABRIC_DIR / urdf_path.parent.name
     if not destination.is_dir():
-        raise SystemExit(f"hdgp fabric dir missing (naming contract broken?): {destination}")
+        # hdgp fabric classes address the variant by this directory name
+        destination.mkdir(parents=True)
+        print(f"  created hdgp fabric dir {destination}")
     for source in (urdf_path, urdf_path.parent / f"{urdf_path.parent.name}_manifest.yaml"):
         (destination / source.name).write_bytes(source.read_bytes())
         print(f"  synced -> {destination / source.name}")

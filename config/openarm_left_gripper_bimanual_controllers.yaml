@@ -14,6 +14,17 @@ controller_manager:
     left_gripper_controller:
       type: position_controllers/GripperActionController
 
+    # 중력보상 피드포워드용. JTC(position)와 **동시에** 활성화한다 — 하드웨어가
+    # 모터에 {kp, kd, pos, vel, tau_ff} 를 보내는데, JTC 가 pos 를, 이쪽이 tau_ff 를
+    # 채운다. 둘은 서로 다른 command interface 를 claim 하므로 충돌하지 않는다.
+    # 없으면 `robotctl pose gravity` 가 발행할 곳이 없다(프로필은 이미 이 이름을
+    # effort_controller 로 선언해 두었다).
+    right_forward_effort_controller:
+      type: forward_command_controller/ForwardCommandController
+
+    left_forward_effort_controller:
+      type: forward_command_controller/ForwardCommandController
+
 left_joint_trajectory_controller:
   ros__parameters:
     joints:
@@ -65,3 +76,35 @@ left_gripper_controller:
       - position
     state_interfaces:
       - position
+
+right_forward_effort_controller:
+  ros__parameters:
+    joints:
+      - openarm_right_joint1
+      - openarm_right_joint2
+      - openarm_right_joint3
+      - openarm_right_joint4
+      - openarm_right_joint5
+      - openarm_right_joint6
+      - openarm_right_joint7
+    interface_name: effort
+    command_interfaces:
+      - effort
+    state_interfaces:
+      - effort
+
+left_forward_effort_controller:
+  ros__parameters:
+    joints:
+      - openarm_left_joint1
+      - openarm_left_joint2
+      - openarm_left_joint3
+      - openarm_left_joint4
+      - openarm_left_joint5
+      - openarm_left_joint6
+      - openarm_left_joint7
+    interface_name: effort
+    command_interfaces:
+      - effort
+    state_interfaces:
+      - effort

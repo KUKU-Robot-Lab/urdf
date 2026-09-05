@@ -96,21 +96,37 @@
             <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
+            <!-- 08.31 추가: 하드웨어(system_interface.cpp:406)가 이미 export 하는데
+                 여기 선언이 없어 controller_manager 가 무시하고 있었다. 발열 추적에
+                 필요하다 — 엄지 rj_dg_1_4 가 막힌 채 계속 밀어붙여 뜨거워진 이력. -->
+            <state_interface name="temperature" />
         </joint>
         <joint name="rj_dg_1_2">
             <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
+            <!-- 08.31 추가: 하드웨어(system_interface.cpp:406)가 이미 export 하는데
+                 여기 선언이 없어 controller_manager 가 무시하고 있었다. 발열 추적에
+                 필요하다 — 엄지 rj_dg_1_4 가 막힌 채 계속 밀어붙여 뜨거워진 이력. -->
+            <state_interface name="temperature" />
         </joint>
         <joint name="rj_dg_1_3">
             <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
+            <!-- 08.31 추가: 하드웨어(system_interface.cpp:406)가 이미 export 하는데
+                 여기 선언이 없어 controller_manager 가 무시하고 있었다. 발열 추적에
+                 필요하다 — 엄지 rj_dg_1_4 가 막힌 채 계속 밀어붙여 뜨거워진 이력. -->
+            <state_interface name="temperature" />
         </joint>
         <joint name="rj_dg_1_4">
             <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
+            <!-- 08.31 추가: 하드웨어(system_interface.cpp:406)가 이미 export 하는데
+                 여기 선언이 없어 controller_manager 가 무시하고 있었다. 발열 추적에
+                 필요하다 — 엄지 rj_dg_1_4 가 막힌 채 계속 밀어붙여 뜨거워진 이력. -->
+            <state_interface name="temperature" />
         </joint>
 
         <!-- Finger 2 joints -->
@@ -118,21 +134,37 @@
             <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
+            <!-- 08.31 추가: 하드웨어(system_interface.cpp:406)가 이미 export 하는데
+                 여기 선언이 없어 controller_manager 가 무시하고 있었다. 발열 추적에
+                 필요하다 — 엄지 rj_dg_1_4 가 막힌 채 계속 밀어붙여 뜨거워진 이력. -->
+            <state_interface name="temperature" />
         </joint>
         <joint name="rj_dg_2_2">
             <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
+            <!-- 08.31 추가: 하드웨어(system_interface.cpp:406)가 이미 export 하는데
+                 여기 선언이 없어 controller_manager 가 무시하고 있었다. 발열 추적에
+                 필요하다 — 엄지 rj_dg_1_4 가 막힌 채 계속 밀어붙여 뜨거워진 이력. -->
+            <state_interface name="temperature" />
         </joint>
         <joint name="rj_dg_2_3">
             <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
+            <!-- 08.31 추가: 하드웨어(system_interface.cpp:406)가 이미 export 하는데
+                 여기 선언이 없어 controller_manager 가 무시하고 있었다. 발열 추적에
+                 필요하다 — 엄지 rj_dg_1_4 가 막힌 채 계속 밀어붙여 뜨거워진 이력. -->
+            <state_interface name="temperature" />
         </joint>
         <joint name="rj_dg_2_4">
             <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
+            <!-- 08.31 추가: 하드웨어(system_interface.cpp:406)가 이미 export 하는데
+                 여기 선언이 없어 controller_manager 가 무시하고 있었다. 발열 추적에
+                 필요하다 — 엄지 rj_dg_1_4 가 막힌 채 계속 밀어붙여 뜨거워진 이력. -->
+            <state_interface name="temperature" />
         </joint>
 
         <!-- Finger 3 joints -->
@@ -140,21 +172,37 @@
             <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
+            <!-- 08.31 추가: 하드웨어(system_interface.cpp:406)가 이미 export 하는데
+                 여기 선언이 없어 controller_manager 가 무시하고 있었다. 발열 추적에
+                 필요하다 — 엄지 rj_dg_1_4 가 막힌 채 계속 밀어붙여 뜨거워진 이력. -->
+            <state_interface name="temperature" />
         </joint>
         <joint name="rj_dg_3_2">
             <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
+            <!-- 08.31 추가: 하드웨어(system_interface.cpp:406)가 이미 export 하는데
+                 여기 선언이 없어 controller_manager 가 무시하고 있었다. 발열 추적에
+                 필요하다 — 엄지 rj_dg_1_4 가 막힌 채 계속 밀어붙여 뜨거워진 이력. -->
+            <state_interface name="temperature" />
         </joint>
         <joint name="rj_dg_3_3">
             <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
+            <!-- 08.31 추가: 하드웨어(system_interface.cpp:406)가 이미 export 하는데
+                 여기 선언이 없어 controller_manager 가 무시하고 있었다. 발열 추적에
+                 필요하다 — 엄지 rj_dg_1_4 가 막힌 채 계속 밀어붙여 뜨거워진 이력. -->
+            <state_interface name="temperature" />
         </joint>
         <joint name="rj_dg_3_4">
             <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
+            <!-- 08.31 추가: 하드웨어(system_interface.cpp:406)가 이미 export 하는데
+                 여기 선언이 없어 controller_manager 가 무시하고 있었다. 발열 추적에
+                 필요하다 — 엄지 rj_dg_1_4 가 막힌 채 계속 밀어붙여 뜨거워진 이력. -->
+            <state_interface name="temperature" />
         </joint>
 
         <!-- Finger 4 joints -->
@@ -162,21 +210,37 @@
             <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
+            <!-- 08.31 추가: 하드웨어(system_interface.cpp:406)가 이미 export 하는데
+                 여기 선언이 없어 controller_manager 가 무시하고 있었다. 발열 추적에
+                 필요하다 — 엄지 rj_dg_1_4 가 막힌 채 계속 밀어붙여 뜨거워진 이력. -->
+            <state_interface name="temperature" />
         </joint>
         <joint name="rj_dg_4_2">
             <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
+            <!-- 08.31 추가: 하드웨어(system_interface.cpp:406)가 이미 export 하는데
+                 여기 선언이 없어 controller_manager 가 무시하고 있었다. 발열 추적에
+                 필요하다 — 엄지 rj_dg_1_4 가 막힌 채 계속 밀어붙여 뜨거워진 이력. -->
+            <state_interface name="temperature" />
         </joint>
         <joint name="rj_dg_4_3">
             <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
+            <!-- 08.31 추가: 하드웨어(system_interface.cpp:406)가 이미 export 하는데
+                 여기 선언이 없어 controller_manager 가 무시하고 있었다. 발열 추적에
+                 필요하다 — 엄지 rj_dg_1_4 가 막힌 채 계속 밀어붙여 뜨거워진 이력. -->
+            <state_interface name="temperature" />
         </joint>
         <joint name="rj_dg_4_4">
             <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
+            <!-- 08.31 추가: 하드웨어(system_interface.cpp:406)가 이미 export 하는데
+                 여기 선언이 없어 controller_manager 가 무시하고 있었다. 발열 추적에
+                 필요하다 — 엄지 rj_dg_1_4 가 막힌 채 계속 밀어붙여 뜨거워진 이력. -->
+            <state_interface name="temperature" />
         </joint>
 
         <!-- Finger 5 joints -->
@@ -184,21 +248,37 @@
             <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
+            <!-- 08.31 추가: 하드웨어(system_interface.cpp:406)가 이미 export 하는데
+                 여기 선언이 없어 controller_manager 가 무시하고 있었다. 발열 추적에
+                 필요하다 — 엄지 rj_dg_1_4 가 막힌 채 계속 밀어붙여 뜨거워진 이력. -->
+            <state_interface name="temperature" />
         </joint>
         <joint name="rj_dg_5_2">
             <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
+            <!-- 08.31 추가: 하드웨어(system_interface.cpp:406)가 이미 export 하는데
+                 여기 선언이 없어 controller_manager 가 무시하고 있었다. 발열 추적에
+                 필요하다 — 엄지 rj_dg_1_4 가 막힌 채 계속 밀어붙여 뜨거워진 이력. -->
+            <state_interface name="temperature" />
         </joint>
         <joint name="rj_dg_5_3">
             <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
+            <!-- 08.31 추가: 하드웨어(system_interface.cpp:406)가 이미 export 하는데
+                 여기 선언이 없어 controller_manager 가 무시하고 있었다. 발열 추적에
+                 필요하다 — 엄지 rj_dg_1_4 가 막힌 채 계속 밀어붙여 뜨거워진 이력. -->
+            <state_interface name="temperature" />
         </joint>
         <joint name="rj_dg_5_4">
             <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
+            <!-- 08.31 추가: 하드웨어(system_interface.cpp:406)가 이미 export 하는데
+                 여기 선언이 없어 controller_manager 가 무시하고 있었다. 발열 추적에
+                 필요하다 — 엄지 rj_dg_1_4 가 막힌 채 계속 밀어붙여 뜨거워진 이력. -->
+            <state_interface name="temperature" />
         </joint>
     </ros2_control>
 

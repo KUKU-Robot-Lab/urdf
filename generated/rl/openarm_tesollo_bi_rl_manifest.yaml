@@ -11,12 +11,19 @@ schema:
   r_hl_*/l_hl_*: right/left hand links
   head_*: D435i pan/tilt head; head_j_pan/head_j_tilt are revolute but stay out of control_joint_order
   head_cam_view: camera view origin frame (+X = viewing direction, +Z up), fixed to head_camera
-  origin note: robot origin sits at the mount plate TOP (vendor origin +8mm); head mounts at z=+0.750m
+  origin note: robot origin sits at the mount plate TOP (vendor origin +8mm); head (head_v1, Fusion 2026-09-05) mounts at z=+0.750m — physical mount height unverified (B4)
 camera_view_frame:
   link: head_cam_view
   parent_link: head_camera
-  xyz: [0.0147, 0.0145, 0.0365]
+  xyz: [0.0115, 9.6e-05, 0.036327]
   rpy: [0, 0, 0]
+camera_optical_frames:
+  parent_link: head_camera
+  color_frame: [0.0115, 9.6e-05, 0.036327]
+  depth_frame: [0.0115, 0.029096, 0.036327]
+  ir_projector_frame: [0.01236, 0.044096, 0.036317]
+  left_ir_frame: [0.0115, 0.029096, 0.036327]
+  right_ir_frame: [0.0115, -0.020904, 0.036327]
   convention: +X viewing direction, +Z up (robot frame; not ROS optical)
 control_joint_order:
   - r_aj_1
@@ -437,6 +444,7 @@ source_to_canonical_links:
   rl_dg_palm: r_hl_palm
   world: body_root
 self_collision_filtered_pairs:  # audited near-contact/nested pairs -> USD collision filters
+- [body_link, head_mid]
 - [l_al_5, l_al_7]
 - [l_hl_base, l_hl_thumb_1]
 - [l_hl_palm, l_hl_ring_2]
