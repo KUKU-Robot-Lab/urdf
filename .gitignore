@@ -8,3 +8,4 @@ log/
 .ruff_cache/
 __pycache__/
 *.pyc
+generated/rl/build_trace.log

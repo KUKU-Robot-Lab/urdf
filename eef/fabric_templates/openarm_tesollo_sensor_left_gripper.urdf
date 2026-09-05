@@ -176,7 +176,7 @@
   <link name="rl_dg_ee">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
     </inertial>
     <visual>
@@ -195,7 +195,7 @@
   <link name="openarm">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-06" ixy="0." ixz="0." iyy="1e-06" iyz="0." izz="1e-06" />
     </inertial>
   </link>
@@ -566,7 +566,7 @@
   <link name="palm_center">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-7" ixy="0." ixz="0." iyy="1e-7" iyz="0." izz="1e-7" />
     </inertial>
   </link>
@@ -580,7 +580,7 @@
   <link name="palm_link_sphere2">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
     </inertial>
   </link>
@@ -593,7 +593,7 @@
   <link name="palm_x">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
     </inertial>
   </link>
@@ -606,7 +606,7 @@
   <link name="palm_x_neg">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
     </inertial>
   </link>
@@ -619,7 +619,7 @@
   <link name="palm_y">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
     </inertial>
   </link>
@@ -632,7 +632,7 @@
   <link name="palm_y_neg">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
     </inertial>
   </link>
@@ -645,7 +645,7 @@
   <link name="palm_z">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
     </inertial>
   </link>
@@ -658,7 +658,7 @@
   <link name="palm_z_neg">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
     </inertial>
   </link>
@@ -672,7 +672,7 @@
   <link name="openarm_right_link2_sphere2">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
     </inertial>
   </link>
@@ -685,7 +685,7 @@
   <link name="openarm_right_link2_sphere3">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
     </inertial>
   </link>
@@ -698,7 +698,7 @@
   <link name="openarm_right_link4_sphere2">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
     </inertial>
   </link>
@@ -711,7 +711,7 @@
   <link name="openarm_right_link4_sphere3">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
     </inertial>
   </link>
@@ -724,7 +724,7 @@
   <link name="openarm_right_link6_sphere2">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
     </inertial>
   </link>
@@ -738,7 +738,7 @@
   <link name="tesollo_right_rl_dg_1_1_sphere2">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
     </inertial>
   </link>
@@ -751,7 +751,7 @@
   <link name="tesollo_right_rl_dg_1_3_sphere2">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
     </inertial>
   </link>
@@ -764,7 +764,7 @@
   <link name="tesollo_right_rl_dg_2_1_sphere2">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
     </inertial>
   </link>
@@ -777,7 +777,7 @@
   <link name="tesollo_right_rl_dg_2_3_sphere2">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
     </inertial>
   </link>
@@ -790,7 +790,7 @@
   <link name="tesollo_right_rl_dg_3_1_sphere2">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
     </inertial>
   </link>
@@ -803,7 +803,7 @@
   <link name="tesollo_right_rl_dg_3_3_sphere2">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
     </inertial>
   </link>
@@ -816,7 +816,7 @@
   <link name="tesollo_right_rl_dg_4_1_sphere2">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
     </inertial>
   </link>
@@ -829,7 +829,7 @@
   <link name="tesollo_right_rl_dg_4_3_sphere2">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
     </inertial>
   </link>
@@ -842,7 +842,7 @@
   <link name="tesollo_right_rl_dg_5_1_sphere2">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
     </inertial>
   </link>
@@ -855,7 +855,7 @@
   <link name="tesollo_right_rl_dg_5_3_sphere2">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
     </inertial>
   </link>
@@ -871,7 +871,7 @@
   <link name="world_body_sphere1">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
     </inertial>
   </link>
@@ -884,7 +884,7 @@
   <link name="world_body_sphere2">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
     </inertial>
   </link>
@@ -897,7 +897,7 @@
   <link name="world_body_sphere3">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0." />
-      <mass value="0.001" />
+      <mass value="1e-05" />
       <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
     </inertial>
   </link>

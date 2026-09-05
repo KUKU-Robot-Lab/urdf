@@ -63,26 +63,43 @@ Wrappers add stable helper frames around vendor end-effector descriptions. They 
 
 Stable source/generated URDFs used as inputs to the RL canonical generator.
 
-- `openarm_tesollo_sensor.urdf`
-- `openarm_tesollo_bi.urdf`
-- `openarm_bi_rh56f1.urdf`
-- `openarm_modular_dual.urdf`
-- `openarm_bimanual_no_mount.urdf`
-
-The first three are the currently validated structures and are used by the RL generator.
+- `openarm_tesollo_bi.urdf` (DG-5F both hands) -> `openarm_dg5f-m_bi`
+- `openarm_tesollo_bi_s.urdf` (DG-5F-S both hands) -> `openarm_dg5f-s_bi`
+- `openarm_bi_rh56f1.urdf` (RH56F1 both hands) -> `openarm_rh56f1_bi`
+- `openarm_gripper_bi.urdf` (stock gripper both arms, `tools/gen_gripper_bi_source.sh`) -> `openarm_gripper_bi`
+- `openarm_tesollo_sensor.urdf`, `openarm_modular_dual.urdf`, `openarm_bimanual_no_mount.urdf` (legacy, not generated from any more)
 
 ### `generated/rl/`
 
-RL-only canonical outputs.
+RL-only canonical outputs (2026-09-05 line-up, one per end-effector, both arms):
 
-- `openarm_tesollo_sensor_rl.urdf`
-- `openarm_tesollo_sensor_rl_manifest.yaml`
-- `openarm_tesollo_bi_rl.urdf`
-- `openarm_tesollo_bi_rl_manifest.yaml`
-- `openarm_bi_rh56f1_rl.urdf`
-- `openarm_bi_rh56f1_rl_manifest.yaml`
+| asset | hands | hand drive | vendor gains ported | fabric variants |
+|---|---|---|---|---|
+| `openarm_dg5f-m_bi_rl` | Tesollo DG-5F x2 (link masses scaled x1.0463 to the measured **1.763 kg** per hand, vendor 1.685) | direct (20/20 per hand) | arm `control_gains.yaml` + `dg5f_driver` PID (p 1.5 / d 0) | `openarm_dg5f-m_bi_right`, `_left` |
+| `openarm_dg5f-s_bi_rl` | Tesollo DG-5F-S x2 | direct | same as above (same driver stack) | `openarm_dg5f-s_bi_right`, `_left` |
+| `openarm_rh56f1_bi_rl` | Inspire RH56F1 x2 | PhysX mimic (6 driven / 12) | arm only - the vendor stack (`vendor/inspire_ws`, RS-485 registers angleSet / speedSet / forceSet) exposes no PD gains -> hand keeps fallback 100/1 | `openarm_rh56f1_bi` |
+| `openarm_gripper_bi_rl` | stock OpenArm gripper x2 | PhysX mimic (jaw 2 follows jaw 1) | arm + `GRIPPER_KP/KD` 5.0/0.1 (`openarm_real` hardware interface, motor-unit values carried verbatim) | `openarm_gripper_bi_right`, `_left` |
 
-Use these for training.
+Common to all four: head_v1 on `body_link` at z=0.750 (B4 measurement pending) — the head
+links/joints/masses come from the URDF, but their geometry is the Fusion USD itself:
+`tools/build_usd.py` grafts `hdgp/assets/simulation_setting/head_v1/usd/head_v1.usda` under
+each head link (`<root>/head_{base,mid,camera}/head_v1/...`, materials and the D435i optical
+frames `head_camera/head_v1/camera_link/{color,depth,left_ir,right_ir,ir_projector}_frame`
+included, referenced physics stripped; ⚠ the RGB lens is the `ir_projector_frame` aperture —
+hand-eye 2026-09-05, see `HEAD_RGB_LENS_FRAME`) — the
+vendor body's head housing / shoulder shell removed and the 60x60 pillar cut at the
+head base plate underside (z=0.730, see `tools/crop_body_plate.py`), every massless
+frame carrying a token 1e-5 kg in the URDF itself, colliders = convex hull on OpenArm
+links (body, arms, head, stock gripper) and convex decomposition on the dexterous hand
+links (manifest `collision_approximation`), origin at the mount plate top.
+
+Each `<asset>.urdf` + `<asset>_manifest.yaml` here is the input of `tools/build_usd.py`;
+`generated/rl/<asset>/` is the built USD bundle (mirrored to `hdgp/assets/robot/<asset>/`).
+
+The pre-09.05 files (`openarm_tesollo_sensor_rl`, `openarm_tesollo_bi_rl`,
+`openarm_tesollo_bi_s_rl`, `openarm_bi_rh56f1_rl`) are frozen on disk for the sim2real
+scripts that still read them; the generator, the USD builder and the fabric generator no
+longer know them.
 
 ## ⚠ URDF 무질량 프레임 — PhysX 유령 1 kg (2026-09-02 실측)
 
@@ -117,8 +134,16 @@ URDF 에서 `<inertial>` 이 없는 링크는 "질량 없는 좌표 프레임"�
 **도구**
 
 ```bash
-# 새 빌드는 자동 처리됨 (build_usd.py: shrink_massless_frames)
+# 2026-09-05 부터 생성기가 URDF 자체에 토큰 관성(1e-5 kg / 1e-7 kg·m²)을 쓴다 — fabric
+# URDF 의 헬퍼 프레임도 같은 1e-5 (PD 모델에서 질량 0 은 발산한다, 사용자 지시).
+# ★벤더 URDF 에 **질량 0 으로 적힌** 링크도 같은 취급이다 — RH56F1 은 sensor/tip 20개가
+#   mass 0 + 영 텐서로 온다(PhysX 는 이것도 1 kg 으로 바꾼다 = 손끝 20 kg). 생성기가
+#   1e-5 로 올리고, build_usd 의 shrink_massless_frames 도 mass<=0 을 잡는다.
+# (generate_rl_urdf.give_massless_frames_token_mass) — USD 임포터가 그대로 physics
+# 레이어에 적고, 아래 shrink_massless_frames 는 뒷단 안전망으로만 남는다.
 IsaacLab/isaaclab.sh -p tools/build_usd.py <asset> --sync-hdgp
+# (2026-09-05 이전의 얇은 변형 `_hull/_lgrip/_armhull` 은 폐기 — 링크별 콜라이더
+#  정책이 캐노니컬 빌드에 들어갔다. manifest `collision_approximation` 참조.)
 
 # 이미 만들어진 자산을 고칠 때 (재빌드는 임포터 드리프트 위험이 있어 비권장)
 IsaacLab/isaaclab.sh -p tools/patch_ghost_masses.py \
@@ -146,36 +171,39 @@ Run commands from anywhere unless noted.
 ### Generate all RL URDFs
 
 ```bash
-python3 /home/user/rl_ws/urdf/tools/generate_rl_urdf.py
+# head 를 Fusion 내보내기(hdgp/assets/simulation_setting/head_v1)에서 갱신했을 때만:
+python3 /home/user/rl_ws/urdf/tools/import_head_v1.py
+# 양팔 스톡 그리퍼 소스(xacro, ROS humble 필요) — 벤더 xacro 가 바뀌었을 때만:
+bash /home/user/rl_ws/urdf/tools/gen_gripper_bi_source.sh
+python3 /home/user/rl_ws/urdf/tools/generate_rl_urdf.py          # URDF + manifest + 자기충돌 감사
+/home/user/rl_ws/IsaacLab/isaaclab.sh -p tools/build_usd.py --sync-hdgp   # USD 4종 -> hdgp/assets/robot/
+python3 /home/user/rl_ws/urdf/tools/gen_fabric_urdfs.py --sync-hdgp        # Fabrics IK URDF 7종
 ```
-
-This generates all validated RL assets under `generated/rl/`.
 
 Expected outputs:
 
 ```text
-generated/rl/openarm_tesollo_sensor_rl.urdf
-generated/rl/openarm_tesollo_sensor_rl_manifest.yaml
-generated/rl/openarm_tesollo_bi_rl.urdf
-generated/rl/openarm_tesollo_bi_rl_manifest.yaml
-generated/rl/openarm_bi_rh56f1_rl.urdf
-generated/rl/openarm_bi_rh56f1_rl_manifest.yaml
+generated/rl/openarm_dg5f-m_bi_rl.urdf      + _manifest.yaml   + openarm_dg5f-m_bi_rl/  (USD)
+generated/rl/openarm_dg5f-s_bi_rl.urdf      + _manifest.yaml   + openarm_dg5f-s_bi_rl/
+generated/rl/openarm_rh56f1_bi_rl.urdf      + _manifest.yaml   + openarm_rh56f1_bi_rl/
+generated/rl/openarm_gripper_bi_rl.urdf     + _manifest.yaml   + openarm_gripper_bi_rl/
+generated/fabric/openarm_dg5f-m_bi_{right,left}/ openarm_dg5f-s_bi_{right,left}/
+                 openarm_gripper_bi_{right,left}/ openarm_rh56f1_bi/
 ```
 
 ### Generate one RL URDF
 
 ```bash
-python3 /home/user/rl_ws/urdf/tools/generate_rl_urdf.py openarm_tesollo_bi
-python3 /home/user/rl_ws/urdf/tools/generate_rl_urdf.py openarm_tesollo_sensor
-python3 /home/user/rl_ws/urdf/tools/generate_rl_urdf.py openarm_bi_rh56f1
+python3 /home/user/rl_ws/urdf/tools/generate_rl_urdf.py openarm_dg5f-m_bi
 ```
 
 Valid source names:
 
 ```text
-openarm_tesollo_sensor
-openarm_tesollo_bi
-openarm_bi_rh56f1
+openarm_dg5f-m_bi
+openarm_dg5f-s_bi
+openarm_rh56f1_bi
+openarm_gripper_bi
 ```
 
 ### Validate the generator syntax
@@ -187,13 +215,13 @@ python3 -m py_compile /home/user/rl_ws/urdf/tools/generate_rl_urdf.py
 ### Inspect action order
 
 ```bash
-sed -n '/^control_joint_order:/,/^kinematic_joint_order:/p'   /home/user/rl_ws/urdf/generated/rl/openarm_tesollo_bi_rl_manifest.yaml
+sed -n '/^control_joint_order:/,/^kinematic_joint_order:/p'   /home/user/rl_ws/urdf/generated/rl/openarm_dg5f-m_bi_rl_manifest.yaml
 ```
 
 ### Inspect full kinematic order
 
 ```bash
-sed -n '/^kinematic_joint_order:/,/^fixed_joint_order:/p'   /home/user/rl_ws/urdf/generated/rl/openarm_bi_rh56f1_rl_manifest.yaml
+sed -n '/^kinematic_joint_order:/,/^fixed_joint_order:/p'   /home/user/rl_ws/urdf/generated/rl/openarm_rh56f1_bi_rl_manifest.yaml
 ```
 
 ### Visualize the modular source xacro
@@ -318,6 +346,8 @@ l_hj_pinky_1..4
 ```
 
 For RH56F1 bimanual, mimic joints are excluded from `control_joint_order` and retained in `kinematic_joint_order`.
+The stock-gripper asset works the same way: `r_hj_gripper_1` / `l_hj_gripper_1` are the
+commandable jaws, `*_hj_gripper_2` mimics them (16 actions in total).
 
 Current RH56F1 control order is:
 
@@ -398,18 +428,14 @@ Use `control_joint_order` for action vector indexing. Use `kinematic_joint_order
 Use one of:
 
 ```text
-/home/user/rl_ws/urdf/generated/rl/openarm_tesollo_sensor_rl.urdf
-/home/user/rl_ws/urdf/generated/rl/openarm_tesollo_bi_rl.urdf
-/home/user/rl_ws/urdf/generated/rl/openarm_bi_rh56f1_rl.urdf
+/home/user/rl_ws/hdgp/assets/robot/openarm_dg5f-m_bi_rl/openarm_dg5f-m_bi_rl.usd
+/home/user/rl_ws/hdgp/assets/robot/openarm_dg5f-s_bi_rl/openarm_dg5f-s_bi_rl.usd
+/home/user/rl_ws/hdgp/assets/robot/openarm_rh56f1_bi_rl/openarm_rh56f1_bi_rl.usd
+/home/user/rl_ws/hdgp/assets/robot/openarm_gripper_bi_rl/openarm_gripper_bi_rl.usd
 ```
 
-And always load the matching manifest:
-
-```text
-/home/user/rl_ws/urdf/generated/rl/openarm_tesollo_sensor_rl_manifest.yaml
-/home/user/rl_ws/urdf/generated/rl/openarm_tesollo_bi_rl_manifest.yaml
-/home/user/rl_ws/urdf/generated/rl/openarm_bi_rh56f1_rl_manifest.yaml
-```
+And always load the matching manifest (`<asset>_manifest.yaml` next to the USD, or
+`generated/rl/<asset>_manifest.yaml` here).
 
 ## Adding a New End-Effector
 

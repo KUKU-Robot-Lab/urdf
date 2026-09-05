@@ -23,7 +23,9 @@ RL_NAMES = list(gen.SOURCES.keys())
 
 
 @pytest.fixture(scope="module", autouse=True)
-def generated_outputs() -> None:
+def generated_outputs(tmp_path_factory) -> None:
+    # temp dir: never strip the audited filter pairs from generated/rl/ manifests
+    gen.OUT_DIR = tmp_path_factory.mktemp("generated_rl_audit")
     assert gen.main(["--skip-audit"]) == 0
 
 
@@ -41,18 +43,17 @@ def test_audit_passes_for_generated_assets(name: str) -> None:
 def test_left_wrist_home_pair_is_filtered() -> None:
     """Regression: l_al_5<->l_al_7 only approaches at the LEFT task home.
 
-    Zero pose leaves it 19mm clear, so the zero-only audit missed it and the
+    Zero pose leaves it 19mm clear, so a zero-only audit misses it and the
     built USD lacked the filter - measured 5.4kN phantom contact at the left
-    gripper home (j7 flex narrows the raw clearance to 3.2mm). Two
-    independent mechanisms must each cover it now:
-    1. mirror symmetrization of the r_al_5<->r_al_7 zero-pose WARN
-    2. the registered task-home poses in audit_poses.yaml
+    gripper home (j7 flex narrows the raw clearance to 3.2mm). The registered
+    task-home poses in audit_poses.yaml must catch it, and the union the
+    generator writes to the manifest must carry it on BOTH sides (mirror
+    symmetrization). (On the retired sensor asset the hand-mounted right
+    link7 also produced a zero-pose hull WARN; the stock-gripper link7 does
+    not, so that mechanism is no longer asserted here.)
     """
-    urdf_path = gen.OUT_DIR / "openarm_tesollo_sensor_rl.urdf"
+    urdf_path = gen.OUT_DIR / "openarm_gripper_bi_rl.urdf"
     links = audit.urdf_link_names(urdf_path)
-
-    zero_findings = audit.audit_urdf(urdf_path)
-    assert ("l_al_5", "l_al_7") in audit.filtered_pairs(zero_findings, links)
 
     poses = audit.load_audit_poses(urdf_path.stem)
     legacy = poses.get("left_gripper_legacy_home")
@@ -60,6 +61,10 @@ def test_left_wrist_home_pair_is_filtered() -> None:
     home_findings = audit.audit_urdf(urdf_path, legacy)
     warned = {(f.link_a, f.link_b) for f in home_findings if f.verdict == "WARN"}
     assert ("l_al_5", "l_al_7") in warned
+
+    all_findings = [f for findings in audit.audit_asset(urdf_path).values() for f in findings]
+    union = audit.filtered_pairs(all_findings, links)
+    assert ("l_al_5", "l_al_7") in union and ("r_al_5", "r_al_7") in union
 
 
 def test_filtered_pairs_mirror_requires_existing_links() -> None:
@@ -76,7 +81,7 @@ def test_audit_detects_reintroduced_penetration(tmp_path: Path) -> None:
     stock link7 collision (gripper motor + bolts) and the adapter plate
     collision. The motor section then penetrates the hand mount again.
     """
-    tree = ET.parse(gen.OUT_DIR / "openarm_tesollo_bi_s_rl.urdf")
+    tree = ET.parse(gen.OUT_DIR / "openarm_dg5f-s_bi_rl.urdf")
     root = tree.getroot()
     stock_collision = str(
         gen.ASSET_ROOTS["openarm_description"] / "meshes" / "arm" / "v10" / "collision" / "link7_symp.stl"

@@ -1,0 +1,32 @@
+robot_name: openarm_rh56f1_bi
+source_rl_urdf: generated/rl/openarm_rh56f1_bi_rl.urdf
+generated_urdf: generated/fabric/openarm_rh56f1_bi/openarm_rh56f1_bi.urdf
+palm_frames: [r_hl_palm_sensor, l_hl_palm_sensor]
+cspace_dim: 26
+cspace_joint_order:  # URDF document order == fabric cspace order
+- r_aj_1
+- r_aj_2
+- r_aj_3
+- r_aj_4
+- r_aj_5
+- r_aj_6
+- r_aj_7
+- r_hj_thumb_1
+- r_hj_thumb_2
+- r_hj_index_1
+- r_hj_middle_1
+- r_hj_ring_1
+- r_hj_pinky_1
+- l_aj_1
+- l_aj_2
+- l_aj_3
+- l_aj_4
+- l_aj_5
+- l_aj_6
+- l_aj_7
+- l_hj_thumb_1
+- l_hj_thumb_2
+- l_hj_index_1
+- l_hj_middle_1
+- l_hj_ring_1
+- l_hj_pinky_1

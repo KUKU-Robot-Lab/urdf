@@ -26,23 +26,20 @@ Keep imported packages under `vendor/`. If a tool needs ROS package lookup, sour
 
 ## Generated Source URDFs
 
-- `generated/source/openarm_tesollo_sensor.urdf`
-- `generated/source/openarm_bi_rh56f1.urdf`
-- `generated/source/openarm_tesollo_bi.urdf`
-- `generated/source/openarm_tesollo_bi_s.urdf` (DG5F-S)
-- `generated/source/openarm_modular_dual.urdf`
-- `generated/source/openarm_bimanual_no_mount.urdf`
+- `generated/source/openarm_tesollo_bi.urdf` (DG5F both hands)
+- `generated/source/openarm_tesollo_bi_s.urdf` (DG5F-S both hands)
+- `generated/source/openarm_bi_rh56f1.urdf` (RH56F1 both hands)
+- `generated/source/openarm_gripper_bi.urdf` (stock gripper both arms; `tools/gen_gripper_bi_source.sh` = vendor v10 xacro `bimanual:=true ee_type:=openarm_hand`)
+- legacy, no longer consumed: `openarm_tesollo_sensor.urdf`, `openarm_modular_dual.urdf`, `openarm_bimanual_no_mount.urdf`
 
-## Generated RL Assets
+## Generated RL Assets (2026-09-05 line-up)
 
-- `generated/rl/openarm_tesollo_sensor_rl.urdf`
-- `generated/rl/openarm_tesollo_sensor_rl_manifest.yaml`
-- `generated/rl/openarm_tesollo_bi_rl.urdf`
-- `generated/rl/openarm_tesollo_bi_rl_manifest.yaml`
-- `generated/rl/openarm_tesollo_bi_s_rl.urdf` (DG5F-S; same chain as the DG5F asset — `*_hl_adapter` carries the DG5F adapter plate mesh, the vendor mount/base map to `*_hl_base`/`*_hl_palm`)
-- `generated/rl/openarm_tesollo_bi_s_rl_manifest.yaml`
-- `generated/rl/openarm_bi_rh56f1_rl.urdf`
-- `generated/rl/openarm_bi_rh56f1_rl_manifest.yaml`
+- `generated/rl/openarm_dg5f-m_bi_rl.urdf` + `_manifest.yaml` (DG5F both hands, source `openarm_tesollo_bi`)
+- `generated/rl/openarm_dg5f-s_bi_rl.urdf` + `_manifest.yaml` (DG5F-S; same chain as the DG5F asset — `*_hl_adapter` carries the DG5F adapter plate mesh, the vendor mount/base map to `*_hl_base`/`*_hl_palm`)
+- `generated/rl/openarm_rh56f1_bi_rl.urdf` + `_manifest.yaml` (RH56F1 both hands)
+- `generated/rl/openarm_gripper_bi_rl.urdf` + `_manifest.yaml` (stock 2-finger gripper both arms; `*_hj_gripper_2` mimics `*_hj_gripper_1`, 16 actions)
+- `generated/rl/<asset>/` — built USD bundle (`tools/build_usd.py`), mirrored to `hdgp/assets/robot/<asset>/`
+- Pre-09.05 outputs (`openarm_tesollo_sensor_rl`, `openarm_tesollo_bi_rl`, `openarm_tesollo_bi_s_rl`, `openarm_bi_rh56f1_rl`) stay on disk, frozen — sim2real scripts still read the sensor URDF; nothing regenerates them.
 
 Regenerate them with:
 
@@ -55,6 +52,21 @@ origin +8mm), so the origin is independent of the real mount thickness (15mm).
 `tools/crop_body_plate.py` (invoked automatically by the generator; needs
 `trimesh`, `shapely`, `rtree`, `mapbox-earcut`) crops the vendor 8mm plate off
 `body_link0` and writes shifted meshes to `generated/rl/meshes/`.
+
+head housing note (2026-09-05): the vendor body ends in a shoulder housing /
+head pocket (open shell, z 0.605–0.765) built around the OLD vendor head.
+head_v1 carries its own base plate, so the same tool removes the whole housing
+(visual: every mesh component starting inside the band; collision: sliced at
+the housing bottom and replaced by a box over the 60x60 pillar footprint) and
+cuts the pillar at the head base plate underside (`HEAD_MOUNT_XYZ` z − 0.020 =
+0.730 → `*_cut_nohousing_top730.stl`; the height is in the file name, derived
+in `generate_rl_urdf.py`, so a B4 mount change re-crops automatically). With
+the housing gone the `body_link ↔ head_mid` overlap and its allowlist entry
+are gone too. Massless frames (`body_root`, `*_hl_mount`, `*_palm_alias`,
+`*_palm_ee`, `*_gripper_tcp`, `head_cam_view`) get a token 1e-5 kg inertial in
+the generated URDF (see the ghost-mass section of README.md). Hand masses:
+DG-5F (`openarm_dg5f-m_bi`) is scaled to the measured 1.763 kg per hand
+(`generate_rl_urdf.HAND_MASS_TARGET_KG`); the other hands keep vendor masses.
 
 link7 note: the stock link7 meshes include the stock-gripper motor section,
 which is physically removed when a replacement hand is mounted. The generator
@@ -111,16 +123,21 @@ probes.
 
 USD build: `IsaacLab/isaaclab.sh -p tools/build_usd.py [asset...] [--sync-hdgp]`
 replaces the manual GUI import. Settings are pinned (**merge_fixed_joints=False**,
-fix_base; runtime cfg decides `enabled_self_collisions`). Colliders are
-**convexDecomposition everywhere**. A convexHull build (the GUI-era default)
-was attempted for spawn speed and REVERTED: PhysX GPU caps convex hulls at 64
-vertices, and the 64-vertex circumscribed hull of a large mesh inflates tens
-of millimetres past the exact hull - measured ghost contacts across a 9.6mm
-gap (l_al_5/l_al_7, 427kN) and even a 36mm gap (body/gripper finger). That is
-incompatible with `enabled_self_collisions=True` and cannot be audited
-offline; GUI-era hull assets only worked because self-collision was always
-off. Slow first env boot is decomposition cooking - it is cached per machine
-afterwards. Merging must stay OFF: hdgp addresses
+fix_base; runtime cfg decides `enabled_self_collisions`). Colliders follow the
+manifest's `collision_approximation` block (2026-09-05 user decision): the
+dexterous hand links (DG-5F / DG-5F-S / RH56F1) are **convexDecomposition**,
+every OpenArm-made link (body, arms, head, stock gripper) is **convexHull**
+(imported as decomposition, then overridden per link in the asset root layer).
+⚠ PhysX GPU caps convex hulls at 64 vertices and the circumscribed hull of a
+large mesh inflates tens of millimetres past the exact hull — measured 2026-08:
+ghost contacts across a 9.6mm gap (l_al_5/l_al_7, 427kN) and a 36mm gap
+(body/gripper finger). That is why every hull-only WARN pair of the audit is
+authored as a PhysX collision filter, and why `enabled_self_collisions=True`
+should be re-probed (`tools/probe_zero_action.py`) on the hull-armed assets
+before a training run relies on it. Joint drives carry the vendor gains
+(arm `control_gains.yaml`, DG-5F `dg5f_driver` PID, stock gripper
+`GRIPPER_KP/KD` from `openarm_real`; RH56F1 has none → fallback 100/1).
+Merging must stay OFF: hdgp addresses
 bodies by name - `*_tip` are the tactile contact-sensor bodies and `*_hl_palm`
 carries the pose frame - and merging silently absorbs them (bi_s 84 -> 64
 bodies, contact sensors then fail at boot). The build verifies the manifest
@@ -134,13 +151,21 @@ extension version is pinned in `IsaacLab/apps/isaaclab.python.kit`
 (isaacsim.asset.importer.urdf 2.4.31) — changing it can change output.
 
 Fabrics URDFs: `python3 tools/gen_fabric_urdfs.py [variant...] [--sync-hdgp]`
-generates the Fabrics IK URDFs (openarm_tesollo_bi_s, openarm_tesollo_bi_s_left,
-openarm_tesollo_sensor_left_gripper, openarm_rh56f1) into `generated/fabric/`
-from the RL URDFs, replacing the four ad-hoc hdgp generators. Structural
-templates (fabric-only helper/sphere frames) live in `eef/fabric_templates/`;
-all kinematics are re-derived and FK-gated (palm+fingertips) against the RL
-URDF. The legacy hdgp fabric dirs (openarm_tesollo, _left, _sensor) are
-intentionally frozen for old pour consumers — never regenerate them.
+generates the Fabrics IK URDFs into `generated/fabric/` from the RL URDFs —
+`openarm_dg5f-m_bi_{right,left}`, `openarm_dg5f-s_bi_{right,left}`,
+`openarm_gripper_bi_{right,left}` (arm only, hand frozen, palm = TCP) and
+`openarm_rh56f1_bi` (both arms). Structural templates (fabric-only
+helper/sphere frames) live in `eef/fabric_templates/` (`openarm_dg5f_left` was
+promoted from the legacy hdgp `openarm_tesollo_left` URDF for the DG-5F left
+sphere layout); all kinematics are re-derived and FK-gated (palm+fingertips)
+against the RL URDF. Inertials are synced from the RL URDF too: arm/finger/tip
+links carry the asset's values, the palm chain (adapter+base+palm; gripper base +
+jaws) is lumped onto `palm_link`, and every fabric-only frame (palm helpers,
+collision spheres) carries the 1e-5 kg token — never 0, the fabric URDF is also
+used as a PD-controlled model. `--sync-hdgp` creates the hdgp dir on first use. The
+legacy hdgp fabric dirs (openarm_tesollo, _left, _sensor, _sensor_right,
+_sensor_left_gripper, openarm_tesollo_bi_s{,_left}, openarm_rh56f1) are frozen
+for old consumers — never regenerate them.
 
 ## Preview / Scratch URDFs
 
@@ -165,8 +190,9 @@ These can be regenerated by colcon/Python tooling and should not be treated as s
 - Arm joints: `r_aj_base`, `r_aj_1..7`, `l_aj_base`, `l_aj_1..7`.
 - Hand links: `r_hl_*`, `l_hl_*`.
 - Hand joints: `r_hj_*`, `l_hj_*`.
-- Head links: `head_base`, `head_mid`, `head_camera`, `head_cam_view` (D435i pan/tilt head, `vendor/head_realsense_d435i`).
-- Head joints: `head_j_mount` (fixed, `body_link` z=+0.750m), `head_j_pan`, `head_j_tilt` (revolute, control 제외 — `kinematic_joint_order`에만 포함), `head_j_cam_view` (fixed).
-- `head_cam_view`: 카메라 뷰 원점 프레임 (+X 시선 방향, +Z 위). 오프셋은 `tools/generate_rl_urdf.py`의 `HEAD_CAM_VIEW_XYZ/RPY` 상수로 조정하고, 각 manifest의 `camera_view_frame` 섹션에 함께 기록됨 — USD 임포트에서 fixed joint가 병합돼도 코드에서 `head_camera` 기준 오프셋으로 카메라를 붙일 수 있음.
+- Head links: `head_base`, `head_mid`, `head_camera`, `head_cam_view` (D435i pan/tilt head **head_v1**, `vendor/head_v1` — `tools/import_head_v1.py` 가 `hdgp/assets/simulation_setting/head_v1` 의 Fusion 내보내기에서 생성. USD `tilt_link`+`camera_link` 는 `head_camera` 한 링크로 병합).
+- Head joints: `head_j_mount` (fixed, `body_link` z=+0.750m — ⚠실기 마운트 높이 미검증(B4), 벤더 body 캡 기준 CAD 정합값은 0.785, 카메라 사슬 역산은 ≈0.729), `head_j_pan`, `head_j_tilt` (revolute, control 제외 — `kinematic_joint_order`에만 포함), `head_j_cam_view` (fixed).
+- `head_cam_view`: 카메라 뷰 원점 프레임 (+X 시선 방향, +Z 위) = D435i **RGB 렌즈** = head_v1 CAD 의 **`ir_projector_frame` 개구부(y +0.0326)** — Fusion 라벨과 달리 hand-eye 재계산(2026-09-05, RMS 1.86 px vs color_frame 5.94 px, 홈 실사진 vs sim 렌더 일치)으로 확정. `generate_rl_urdf.HEAD_RGB_LENS_FRAME`. 오프셋은 `tools/generate_rl_urdf.py` 가 `vendor/head_v1/head_data.json` 에서 읽고(`HEAD_CAM_VIEW_XYZ`), depth/IR/프로젝터 원점은 manifest `camera_optical_frames` 에 기록, 각 manifest의 `camera_view_frame` 섹션에 함께 기록됨 — USD 임포트에서 fixed joint가 병합돼도 코드에서 `head_camera` 기준 오프셋으로 카메라를 붙일 수 있음.
+- ★USD 의 head 지오메트리는 **Fusion USD 그대로**다(2026-09-05 사용자 지시). `tools/build_usd.py graft_head_v1` 이 임포터가 OBJ/STL 로 다시 만든 head 메시를 비활성화하고 각 head 링크 아래 `head_v1` Xform 에 `hdgp/assets/simulation_setting/head_v1/usd/head_v1.usda` 의 `/HeadV1` 을 참조한다(링크 원점만큼 되돌리는 translate; 참조본의 ArticulationRoot/RigidBody/Mass API·조인트는 제거·비활성). 그래서 면 단위 머티리얼과 광학 프레임 프림 `<root>/head_camera/head_v1/camera_link/{color,depth,left_ir,right_ir,ir_projector}_frame`(ROS 광학 자세 `orient (0.5,−0.5,0.5,−0.5)`)이 USD 에 살아 있다. 빌드가 `color_frame` 월드 위치 == `head_cam_view` 를 검증한다.
 - Action order lives in each manifest's `control_joint_order` and is always right arm, right hand, left arm, left hand.
 - Fixed, mimic, sensor, base, palm, and tip joints stay in `kinematic_joint_order` for physics and observation mapping.

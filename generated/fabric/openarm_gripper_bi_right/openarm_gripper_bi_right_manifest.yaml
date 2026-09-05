@@ -1,0 +1,13 @@
+robot_name: openarm_gripper_bi_right
+source_rl_urdf: generated/rl/openarm_gripper_bi_rl.urdf
+generated_urdf: generated/fabric/openarm_gripper_bi_right/openarm_gripper_bi_right.urdf
+palm_frame: palm_link
+cspace_dim: 7
+cspace_joint_order:  # URDF document order == fabric cspace order
+- openarm_right_joint1
+- openarm_right_joint2
+- openarm_right_joint3
+- openarm_right_joint4
+- openarm_right_joint5
+- openarm_right_joint6
+- openarm_right_joint7
