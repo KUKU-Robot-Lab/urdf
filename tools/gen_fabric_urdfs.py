@@ -580,6 +580,16 @@ def sync_hdgp(urdf_path: Path) -> None:
     for source in (urdf_path, urdf_path.parent / f"{urdf_path.parent.name}_manifest.yaml"):
         (destination / source.name).write_bytes(source.read_bytes())
         print(f"  synced -> {destination / source.name}")
+    # Fabric URDFs reference the shared mesh pool. Right-side templates use "meshes/...", so the
+    # variant dir needs the same symlink the legacy dirs have (meshes -> ../openarm_tesollo/meshes);
+    # without it urdfpy fails with "string is not a file" (09.06, dg5f-m).
+    meshes = destination / "meshes"
+    if 'filename="meshes/' in urdf_path.read_text() and not meshes.exists():
+        meshes.symlink_to(Path("..") / "openarm_tesollo" / "meshes")
+        print(f"  linked  -> {meshes} -> ../openarm_tesollo/meshes")
+    print("  NOTE: finger collision spheres are a post-process — run "
+          "hdgp/scripts/tools/patch_fabric_finger_spheres.py --robot "
+          f"{urdf_path.parent.name} --params <variant params> after every sync")
 
 
 def main(argv: list[str]) -> int:
