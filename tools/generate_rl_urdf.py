@@ -141,6 +141,23 @@ BODY_TOP_CROP_Z = HEAD_MOUNT_Z + _load_head_base_plate_bottom_z()
 # manifest (`collision_approximation`) so tools/build_usd.py never guesses.
 OPENARM_HULL_LINK_PREFIXES = ("body_link", "head_", "r_al_", "l_al_", "r_hl_gripper_", "l_hl_gripper_")
 
+# ★★2026-09-08 — 손도 convex hull 로 굽는 자산. 근거는 **벤더 자신의 Isaac 변환 설정**이다:
+#   vendor/delto_m_ros2/dg_isaacsim/dg5f_telop/rb10_1300e_dg5f_{left,right}/config.yaml
+#   = Tesollo 가 덤프한 `UrdfConverterCfg` 이고 `collider_type: convex_hull` 로 되어 있다.
+#   09.05 에 우리가 고른 `convex_decomposition` 은 **비벤더 선택**이었고, 그 결과 손 두 개가
+#   collision shape ~710개(로봇 전체 731, 런타임 `max_shapes` 실측)를 차지했다. 조각 경계의
+#   깊은 관통 → 큰 depenetration 임펄스 → **관절 한계 돌파**로 이어졌다: `r_hj_thumb_1` 이
+#   접촉 중 하한 −0.384 를 넘어 **−4.075 rad** 까지 밀려나고 되돌아오지 않는다(표본 93%).
+#   지령은 늘 한계 안이므로 정책 문제가 아니다. 계측 도구는
+#   hdgp `scripts/analysis/fj_joint_limit_viol.py`.
+#   ⚠자산별로 갈라 적용한다(사용자 확정: DG-5F-M 먼저). 나머지 자산은 검증 후 판단.
+HAND_HULL_ASSETS = ("openarm_dg5f-m_bi",)
+
+
+def collider_default(asset: str) -> str:
+    """자산의 기본 collision 근사. 손까지 hull 인 자산은 importer 단계에서 바로 hull 로 굽는다."""
+    return "convex_hull" if asset in HAND_HULL_ASSETS else "convex_decomposition"
+
 
 def convex_hull_links(root: ET.Element) -> list[str]:
     """Links with mesh colliders that the USD build converts to convex hulls."""
@@ -156,6 +173,12 @@ def convex_hull_links(root: ET.Element) -> list[str]:
 # ★2026-09-05 asset line-up: four bimanual assets, one per end-effector. The key is
 #   the asset name (hdgp/assets/robot/<key>_rl/); the value is the composed source.
 #     openarm_dg5f-m_bi   Tesollo DG-5F   (vendor/delto_m_ros2 dg_description), both hands
+#     openarm_dg5f-m-short_bi
+#                         Tesollo DG-5F, short mount/base (vendor/tesollo_model
+#                         dg5f, the CAD release), both hands. Same finger chain and
+#                         joint names as openarm_dg5f-m_bi; *_dg_palm sits 47.8mm
+#                         closer to the flange and the CAD masses/limits differ from
+#                         the driver copies - see tools/gen_dg5f_short_xacro.py.
 #     openarm_dg5f-s_bi   Tesollo DG-5F-S (vendor/tesollo_model dg5fs),          both hands
 #     openarm_rh56f1_bi   Inspire RH56F1,                                        both hands
 #     openarm_gripper_bi  stock OpenArm 2-finger gripper (openarm_hand),         both hands
@@ -166,6 +189,7 @@ def convex_hull_links(root: ET.Element) -> list[str]:
 SOURCES = OrderedDict(
     [
         ("openarm_dg5f-m_bi", ROOT / "generated" / "source" / "openarm_tesollo_bi.urdf"),
+        ("openarm_dg5f-m-short_bi", ROOT / "generated" / "source" / "openarm_tesollo_bi_short.urdf"),
         ("openarm_dg5f-s_bi", ROOT / "generated" / "source" / "openarm_tesollo_bi_s.urdf"),
         ("openarm_rh56f1_bi", ROOT / "generated" / "source" / "openarm_bi_rh56f1.urdf"),
         ("openarm_gripper_bi", ROOT / "generated" / "source" / "openarm_gripper_bi.urdf"),
@@ -743,6 +767,76 @@ def scale_hand_masses(root: ET.Element, target_kg: float) -> dict[str, float]:
     return factors
 
 
+# ★★2026-09-09 — 벤더에 없는 **순수 주소지정용 프레임**을 RL 자산에서 뺀다.
+#   벤더 손은 28링크(`rl_dg_{mount,base,palm}` + 5×`_1.._4,_tip`)인데 우리는 31링크였다.
+#   추가분 셋 중 둘은 **변환이 항등**이라 기구학적으로 아무 일도 안 하면서 1e-5 kg 강체만
+#   늘린다 — `r_hl_mount`(→adapter 가 0,0,0) 와 `r_hl_palm_alias`(→palm_ee 가 0,0,0).
+#   PhysX 는 무질량 강체를 만들 수 없어(1 kg 유령) 토큰 질량을 줄 수밖에 없으므로,
+#   "sim 에서 무질량·무접촉" 을 실제로 얻는 방법은 **링크를 없애는 것**뿐이다(사용자 확정).
+#   `*_hl_palm_ee` 는 오프셋(0.028,0,0.04)이 있고 `robots.py` 가 `palm_ee_body` 로 쓰므로 남긴다.
+DROP_ADDRESSING_FRAMES = ("r_hl_mount", "l_hl_mount", "r_hl_palm_alias", "l_hl_palm_alias")
+
+
+def _origin_of(joint: ET.Element) -> tuple[list[float], list[float]]:
+    o = joint.find("origin")
+    xyz = [float(v) for v in (o.get("xyz") if o is not None else "0 0 0").split()]
+    rpy = [float(v) for v in (o.get("rpy") if o is not None else "0 0 0").split()]
+    return xyz, rpy
+
+
+def _compose_origins(outer: ET.Element, inner: ET.Element) -> None:
+    """`inner` 의 origin 을 `outer ∘ inner` 로 덮어쓴다(부모가 사라질 때 변환 보존)."""
+    import numpy as np
+
+    def mat(xyz, rpy):
+        cr, cp, cy = np.cos(rpy)
+        sr, sp, sy = np.sin(rpy)
+        R = np.array([
+            [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
+            [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
+            [-sp,     cp * sr,                cp * cr],
+        ])
+        T = np.eye(4); T[:3, :3] = R; T[:3, 3] = xyz
+        return T
+
+    T = mat(*_origin_of(outer)) @ mat(*_origin_of(inner))
+    R = T[:3, :3]
+    pitch = float(np.arctan2(-R[2, 0], np.hypot(R[0, 0], R[1, 0])))
+    roll = float(np.arctan2(R[2, 1], R[2, 2]))
+    yaw = float(np.arctan2(R[1, 0], R[0, 0]))
+    o = inner.find("origin")
+    if o is None:
+        o = ET.SubElement(inner, "origin")
+    o.set("xyz", " ".join(f"{v:.9g}" for v in T[:3, 3]))
+    o.set("rpy", " ".join(f"{v:.9g}" for v in (roll, pitch, yaw)))
+
+
+def drop_addressing_frames(root: ET.Element) -> list[str]:
+    """`DROP_ADDRESSING_FRAMES` 링크를 제거하고 그 고정변환을 자식 조인트에 합성한다."""
+    dropped = []
+    for name in DROP_ADDRESSING_FRAMES:
+        link = next((l for l in root.findall("link") if l.get("name") == name), None)
+        if link is None:
+            continue
+        if link.findall("collision") or link.findall("visual"):
+            raise RuntimeError(f"{name}: 지오메트리가 있는 링크는 주소용 프레임이 아니다 — 제거 거부")
+        incoming = [j for j in root.findall("joint")
+                    if (j.find("child") is not None
+                        and j.find("child").get("link") == name)]
+        if len(incoming) != 1 or incoming[0].get("type") != "fixed":
+            raise RuntimeError(f"{name}: 들어오는 고정관절이 정확히 1개가 아니다 — 제거 거부")
+        parent = incoming[0].find("parent").get("link")
+        for j in root.findall("joint"):
+            pj = j.find("parent")
+            if pj is not None and pj.get("link") == name:
+                _compose_origins(incoming[0], j)
+                pj.set("link", parent)
+        root.remove(incoming[0])
+        root.remove(link)
+        dropped.append(name)
+    return dropped
+
+
 def give_massless_frames_token_mass(root: ET.Element) -> list[str]:
     """Links without <inertial> AND links whose vendor mass is below the token
     (RH56F1 ships its 20 sensor/tip links with mass 0 and a zero tensor - PhysX
@@ -960,11 +1054,12 @@ def write_manifest(
     text.append(f"source_urdf: {relative_to_root(source_path)}\n")
     text.append(f"generated_urdf: {relative_to_root(urdf_path)}\n")
     text.append(f"asset: {urdf_path.stem}\n")
-    # USD import contract (tools/build_usd.py reads this): dexterous hand links keep
-    # convex decomposition (the audit's hull-only WARN pairs are filtered either way),
-    # OpenArm body/arm/head/stock-gripper links become plain convex hulls.
+    # USD import contract (tools/build_usd.py reads this): OpenArm body/arm/head/
+    # stock-gripper links are always plain convex hulls. Dexterous hand links keep
+    # convex decomposition **except** for assets in HAND_HULL_ASSETS, where the
+    # vendor's own Isaac conversion config (convex_hull) governs - see that constant.
     text.append("collision_approximation:\n")
-    text.append("  default: convex_decomposition\n")
+    text.append(f"  default: {collider_default(urdf_path.stem.removesuffix('_rl'))}\n")
     text.append("  convex_hull_links:\n")
     text.append(yaml_list(convex_hull_links(root), indent=2))
     text.append("schema:\n")
@@ -1027,6 +1122,7 @@ def generate_one(name: str, source_path: Path) -> tuple[Path, Path]:
               f"(x{factors['r']:.4f} / x{factors['l']:.4f})")
     head_link_map, head_joint_map = attach_head(root)
     link_map, joint_map = merge_maps((link_map, joint_map), (head_link_map, head_joint_map))
+    drop_addressing_frames(root)      # ★토큰 질량 부여 **전에** — 없앨 링크에 질량을 줄 이유가 없다
     give_massless_frames_token_mass(root)
     reorder_top_level(root)
     control = control_joint_order(root)

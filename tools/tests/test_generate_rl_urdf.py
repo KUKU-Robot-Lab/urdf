@@ -145,7 +145,8 @@ def test_dg5f_hand_mass_matches_measurement() -> None:
 @pytest.mark.parametrize("name", [n for n in RL_NAMES if n not in gen.HAND_MASS_TARGET_KG])
 def test_other_hands_keep_vendor_mass(name: str) -> None:
     root = load_urdf(name)
-    vendor = {"openarm_dg5f-s_bi": 1.2084, "openarm_rh56f1_bi": 0.7077, "openarm_gripper_bi": 0.4222}
+    vendor = {"openarm_dg5f-m-short_bi": 1.5700, "openarm_dg5f-s_bi": 1.2084,
+              "openarm_rh56f1_bi": 0.7077, "openarm_gripper_bi": 0.4222}
     for side in ("r", "l"):
         assert hand_mass_kg(root, side) == pytest.approx(vendor[name], abs=2e-3)
 
@@ -226,10 +227,22 @@ HAND_MOUNT_NAMES = [name for name in RL_NAMES if "gripper" not in name]
 
 @pytest.mark.parametrize("name", RL_NAMES)
 def test_manifest_collider_policy(name: str) -> None:
-    """OpenArm links -> convex hull, dexterous hand links -> decomposition (09.05)."""
+    """OpenArm links -> convex hull; hand links -> decomposition, except HAND_HULL_ASSETS.
+
+    09.05: dexterous hand links kept convex decomposition.
+    ★09.08: `openarm_dg5f-m_bi` moves to `convex_hull` for the whole asset, because the
+    vendor's own Isaac conversion config says `collider_type: convex_hull`
+    (vendor/delto_m_ros2/dg_isaacsim/.../config.yaml). Our decomposition was a non-vendor
+    choice and produced ~710 hand collision shapes, whose deep penetrations drove
+    `r_hj_thumb_1` 3.7 rad past its hard limit under contact.
+    """
     manifest = load_manifest(name)
     policy = manifest["collision_approximation"]
-    assert policy["default"] == "convex_decomposition"
+    assert policy["default"] == gen.collider_default(name)
+    if name in gen.HAND_HULL_ASSETS:
+        assert policy["default"] == "convex_hull"
+    else:
+        assert policy["default"] == "convex_decomposition"
     hull = set(policy["convex_hull_links"])
     assert {"body_link", "r_al_1", "l_al_7", "head_base"} <= hull
     assert all(link.startswith(gen.OPENARM_HULL_LINK_PREFIXES) for link in hull)
