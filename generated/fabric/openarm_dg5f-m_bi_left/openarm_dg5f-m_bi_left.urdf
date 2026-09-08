@@ -59,7 +59,7 @@
     <parent link="palm_link" />
     <child link="tesollo_right_rl_dg_1_1" />
     <axis xyz="1 0 0" />
-    <limit lower="-0.890117919" upper="0.383972435" effort="7.5" velocity="3.1415927" />
+    <limit lower="-0.16" upper="0.16" effort="7.5" velocity="3.1415927" />
   </joint>
   <joint name="rj_dg_1_2" type="revolute">
     <origin xyz="0.04195 0 0" rpy="0 0 0" />
@@ -729,7 +729,7 @@
   </link>
   <link name="palm_link">
     <inertial>
-      <origin xyz="-0.00399884547 -0.000664671541 -0.00420283444" rpy="0 0 0" /><mass value="0.8893775" /><inertia ixx="0.00242413" ixy="-1.45471e-05" ixz="0.000136187" iyy="0.00232925" iyz="6.58095e-05" izz="0.000969876" /></inertial>
+      <origin xyz="-0.00399893539 -0.000664686488 -0.00420209914" rpy="0 0 0" /><mass value="0.8893575" /><inertia ixx="0.00242388" ixy="-1.45471e-05" ixz="0.000136184" iyy="0.002329" iyz="6.58091e-05" izz="0.000969676" /></inertial>
     <visual>
       <origin xyz="0. 0. 0." rpy="1.5707872 0. 0. " />
       <geometry>

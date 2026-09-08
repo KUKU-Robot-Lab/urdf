@@ -729,7 +729,7 @@
   </link>
   <link name="palm_link">
     <inertial>
-      <origin xyz="0.00080232735 -0.00251364245 0.0341932633" rpy="0 0 0" /><mass value="0.681604335" /><inertia ixx="0.000961925" ixy="-3.86766e-06" ixz="-2.17221e-05" iyy="0.000825621" iyz="6.37412e-05" izz="0.000352002" /></inertial>
+      <origin xyz="0.000802350893 -0.00251371621 0.0341945454" rpy="0 0 0" /><mass value="0.681584335" /><inertia ixx="0.000961685" ixy="-3.8677e-06" ixz="-2.17214e-05" iyy="0.000825381" iyz="6.3739e-05" izz="0.000351802" /></inertial>
     <visual>
       <origin xyz="0. 0. 0." rpy="1.5707872 0. 0. " />
       <geometry>

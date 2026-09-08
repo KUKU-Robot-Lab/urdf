@@ -114,7 +114,7 @@ kinematic_joint_order:
   - r_aj_5
   - r_aj_6
   - r_aj_7
-  - r_hj_adapter
+  - r_hj_mount
   - r_hj_base
   - r_hj_palm
   - r_hj_palm_ee
@@ -151,7 +151,7 @@ kinematic_joint_order:
   - l_aj_5
   - l_aj_6
   - l_aj_7
-  - l_hj_adapter
+  - l_hj_mount
   - l_hj_base
   - l_hj_palm
   - l_hj_palm_ee
@@ -187,7 +187,7 @@ kinematic_joint_order:
 fixed_joint_order:
   - body_j_base
   - r_aj_base
-  - r_hj_adapter
+  - r_hj_mount
   - r_hj_base
   - r_hj_palm
   - r_hj_palm_ee
@@ -197,7 +197,7 @@ fixed_joint_order:
   - r_hj_ring_tip
   - r_hj_pinky_tip
   - l_aj_base
-  - l_hj_adapter
+  - l_hj_mount
   - l_hj_base
   - l_hj_palm
   - l_hj_palm_ee
