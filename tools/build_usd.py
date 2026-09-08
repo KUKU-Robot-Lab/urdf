@@ -68,6 +68,7 @@ app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
 import math  # noqa: E402
+import os as _os
 import shutil  # noqa: E402
 import sys  # noqa: E402
 import xml.etree.ElementTree as ET  # noqa: E402
@@ -82,6 +83,7 @@ from pxr import Gf, PhysxSchema, Usd, UsdGeom, UsdPhysics  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 RL_DIR = ROOT / "generated" / "rl"
 HDGP_ROBOT_DIR = ROOT.parent / "hdgp" / "assets" / "robot"
+_RGB_FRAME: dict[str, str] = {}
 
 # ★2026-09-05 (user): the head must come from the Fusion USD itself, not from the
 #   URDF importer's re-meshed copy - head_v1.usda carries the per-face materials and
@@ -271,6 +273,11 @@ class AssetBuild:
 ASSET_BUILDS: dict[str, AssetBuild] = {
     "openarm_dg5f-m_bi_rl": AssetBuild(
         hand_drive="direct", gain_sources=(ARM_DRIVER_GAINS, DG5F_DRIVER_GAINS)),
+    # DG-5F short base: the same DG-5F hand with a shortened mount/base, so the
+    # same dg5f_driver PID applies verbatim (identical lj_/rj_dg_* joint names;
+    # dg5f_ros2's config is byte-identical to the delto_m_ros2 copy read here).
+    "openarm_dg5f-m-short_bi_rl": AssetBuild(
+        hand_drive="direct", gain_sources=(ARM_DRIVER_GAINS, DG5F_DRIVER_GAINS)),
     # DG-5F-S shares the dg5f_driver stack (same lj_/rj_dg_* joint names).
     "openarm_dg5f-s_bi_rl": AssetBuild(
         hand_drive="direct", gain_sources=(ARM_DRIVER_GAINS, DG5F_DRIVER_GAINS)),
@@ -405,7 +412,8 @@ def convert(asset: str) -> Path:
     rgb_frame = (manifest.get("camera_view_frame") or {}).get("rgb_lens_usd_frame")
     if not rgb_frame:
         raise SystemExit(f"[{asset}] manifest camera_view_frame has no rgb_lens_usd_frame - regenerate the URDF")
-    verify_head_v1_graft(usd_path, asset, rgb_frame)
+    _RGB_FRAME[asset] = rgb_frame
+    # ★head 검증은 sync 후로 옮겼다 — 참조가 상대경로라 hdgp 배치에서만 해석된다.
     verify_contract(usd_path, manifest, asset, urdf_path, want=APPROX_TOKEN[collider_type],
                     per_link_want={l: "convexHull" for l in hull_links})
     patch_and_verify_mimic_joints(usd_path, asset, urdf_path)
@@ -417,6 +425,8 @@ def convert(asset: str) -> Path:
     # exact urdf/manifest the usd was built from
     for source in (urdf_path, manifest_path):
         shutil.copyfile(source, out_dir / source.name)
+    # ★반드시 **마지막** — 이 뒤로는 head 참조가 빌드 디렉터리에서 해석되지 않는다.
+    relativize_head_reference(usd_path, asset)
     return usd_path
 
 
@@ -462,6 +472,9 @@ def graft_head_v1(usd_path: Path, asset: str) -> None:
         graft = stage.DefinePrim(link_prim.GetPath().AppendChild(HEAD_V1_GRAFT_PRIM), "Xform")
         ox, oy, oz = offsets[link]
         UsdGeom.Xformable(graft).AddTranslateOp().Set(Gf.Vec3d(-ox, -oy, -oz))
+        # ★참조는 여기서 **절대경로**로 건다 — 아래에서 참조된 프림을 읽어 물리를 벗겨내야
+        #   하므로 저작 시점에 해석돼야 한다. 배포용 상대경로 변환은 convert() 마지막의
+        #   `relativize_head_reference()` 가 한다(사유는 그 함수 주석).
         graft.GetReferences().AddReference(str(HEAD_V1_USD), HEAD_V1_ROOT_PRIM)
         # one articulation only: strip the referenced head's own physics
         graft.RemoveAPI(UsdPhysics.ArticulationRootAPI)
@@ -484,6 +497,37 @@ def graft_head_v1(usd_path: Path, asset: str) -> None:
     stage.GetRootLayer().Save()
     print(f"[{asset}] head_v1.usda grafted onto {len(HEAD_V1_GRAFT)} head links ({grafted} usda links; "
           f"optical frames at <root>/head_camera/{HEAD_V1_GRAFT_PRIM}/camera_link/*_frame)")
+
+
+def relativize_head_reference(usd_path: Path, asset: str) -> int:
+    """head_v1 참조를 **hdgp 배치 기준 상대경로**로 다시 쓴다. convert() 의 마지막 단계.
+
+    ★2026-09-09. 여태 이 참조에 빌드 머신의 절대경로(`/home/user/rl_ws/...`)가 박혀
+      학습 서버(`/home/oem/...`)에서 열리지 않았다. 자산은 USD 만 배포되는데 참조 대상
+      head_v1 은 **서버에도 존재한다** — 경로만 틀렸다. 치명적이지 않아 경고로만 남았고
+      (팔·손 물리엔 안 닿는다) env 하나당 3줄씩 나온다: 4096 env 에 12,288줄,
+      24576 env 에 73,728줄이 되어 씬 구축을 늦춘다.
+      ⚠**머리 지오메트리가 서버 학습에서 통째로 빠져 있었다**는 뜻이기도 하다.
+
+    상대경로는 hdgp 배치(`assets/robot/<asset>/` → `assets/simulation_setting/`) 기준이라
+    빌드 디렉터리에서는 해석되지 않는다. 그래서 이 변환은 **모든 편집이 끝난 뒤**에 하고,
+    head graft 검증은 sync 후 hdgp 사본에서 한다(main 참조).
+    """
+    rel = _os.path.relpath(HEAD_V1_USD, HDGP_ROBOT_DIR / asset)
+    stage = Usd.Stage.Open(str(usd_path))
+    changed = 0
+    for prim in stage.TraverseAll():
+        if prim.GetName() != HEAD_V1_GRAFT_PRIM:
+            continue
+        refs = prim.GetReferences()
+        refs.ClearReferences()
+        refs.AddReference(rel, HEAD_V1_ROOT_PRIM)
+        changed += 1
+    if not changed:
+        raise SystemExit(f"[{asset}] head_v1 graft 프림을 못 찾았다 — 상대경로 변환 실패")
+    stage.GetRootLayer().Save()
+    print(f"[{asset}] head_v1 참조 상대경로화 {changed}개 -> {rel}")
+    return changed
 
 
 def verify_head_v1_graft(usd_path: Path, asset: str, rgb_frame: str) -> None:
@@ -900,6 +944,13 @@ def main() -> int:
         if args_cli.sync_hdgp:
             sync_hdgp(asset, usd_path)
             _trace(f"[{asset}] synced")
+            # head_v1 참조는 hdgp 배치 기준 상대경로라 **여기서만** 해석된다.
+            verify_head_v1_graft(HDGP_ROBOT_DIR / asset / f"{asset}.usd", asset, _RGB_FRAME[asset])
+            _trace(f"[{asset}] head_v1 graft verified (synced copy)")
+        else:
+            raise SystemExit(
+                f"[{asset}] --sync-hdgp 없이 빌드하면 head_v1 참조(상대경로)를 검증할 수 없다 — "
+                "빌드는 끝났지만 검증되지 않은 자산이다. --sync-hdgp 로 다시 돌릴 것.")
     _trace("build done")
     return 0
 
