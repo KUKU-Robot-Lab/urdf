@@ -789,7 +789,19 @@ def scale_hand_masses(root: ET.Element, target_kg: float) -> dict[str, float]:
 #   현 과제(컵 grasp-lift)는 엄지 대향각을 크게 쓸 필요가 없다(리셋도 0).
 JOINT_LIMIT_RESTRICTIONS: dict[str, dict[str, tuple[float, float]]] = {
     "openarm_dg5f-m_bi": {
-        r"[rl]_hj_thumb_1": (-0.16, 0.16),
+        # ① 벌림/대향 `_1` 5개 — 사용자 확정 2026-09-09: "무조건 옆 손가락을 침범한다".
+        #    엄지는 실측으로도 하한 −22.9° 가 베이스를 0.67 mm 파고든다. 리셋이 전부 0 이고
+        #    현 과제(컵 grasp-lift)는 벌림을 크게 안 쓴다. ⚠`pinky_1` 은 외전이 아니라
+        #    Z-flex(대향축)라 성격이 다르다 — 같은 폭을 적용했으니 필요하면 여기만 분리할 것.
+        r"[rl]_hj_(thumb|index|middle|ring|pinky)_1": (-0.16, 0.16),
+        # ② 엄지 굴곡 상한 — 다른 관절을 편 채 `_3=_4` 를 훑은 실측:
+        #    0~1.05 rad 은 간극 0.15 mm 유지, **1.20 rad(68.8°)부터 tip↔palm 이 4.95 mm 관통**.
+        #    네 손가락은 1.571 까지 5~8 mm 간극이 남아 벤더값을 그대로 둔다(축소 규칙 없음).
+        r"[rl]_hj_thumb_[34]": (0.0, 1.05),
+        # ③ `_3/_4` 하한 0 — 액션 범위는 이미 override 로 0 이었지만 **물리 한계는 ±1.571**
+        #    이라 접촉이 관절을 음수로 밀 수 있었다(c 시리즈 실측 `index_3` −1.16 rad =
+        #    손가락이 66° 뒤로 꺾임). 정책이 명령할 수 없는 자세를 물리가 만들지 못하게 한다.
+        r"[rl]_hj_(index|middle|ring|pinky)_[34]": (0.0, 1.5708),
     },
 }
 
@@ -812,9 +824,11 @@ def restrict_joint_limits(root: ET.Element, asset: str) -> list[str]:
                 raise RuntimeError(f"{name}: <limit> 이 없다 — 한계 축소 불가")
             lo, hi = float(limit.get("lower")), float(limit.get("upper"))
             lo2, hi2 = max(lo, new_lo), min(hi, new_hi)
-            if not lo2 < 0.0 < hi2:
+            # 리셋(영 자세)이 **닫힌 구간 안**에 있어야 한다. 경계는 정상이다 —
+            # `_3/_4` 는 하한을 정확히 0 으로 잡는 것이 의도다(손등 과신전 차단).
+            if not (lo2 <= 0.0 <= hi2) or lo2 >= hi2:
                 raise RuntimeError(
-                    f"{name}: 축소 범위 [{lo2}, {hi2}] 가 영 자세(리셋)를 품지 않는다")
+                    f"{name}: 축소 범위 [{lo2}, {hi2}] 가 영 자세(리셋)를 품지 않거나 폭이 0 이다")
             limit.set("lower", f"{lo2:g}")
             limit.set("upper", f"{hi2:g}")
             changed.append(f"{name} [{lo:.4f},{hi:.4f}]→[{lo2:.4f},{hi2:.4f}]")
