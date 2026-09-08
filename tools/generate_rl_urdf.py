@@ -774,6 +774,55 @@ def scale_hand_masses(root: ET.Element, target_kg: float) -> dict[str, float]:
 #   PhysX 는 무질량 강체를 만들 수 없어(1 kg 유령) 토큰 질량을 줄 수밖에 없으므로,
 #   "sim 에서 무질량·무접촉" 을 실제로 얻는 방법은 **링크를 없애는 것**뿐이다(사용자 확정).
 #   `*_hl_palm_ee` 는 오프셋(0.028,0,0.04)이 있고 `robots.py` 가 `palm_ee_body` 로 쓰므로 남긴다.
+# ★★2026-09-09 실측 기반 **관절한계 축소**(사용자 확정: thumb_1 은 보수적으로 고정).
+#   벤더 URDF 의 `_hj_thumb_1` 명목 범위 [−0.384, +0.890] 은 **실제 가동 범위를 과장한다**.
+#   엄지↔손바닥/베이스 raw 메시 간극을 각도별로 재면(도구: tools/audit_self_collision.py
+#   의 penetration API, 산출 표는 커밋 메시지 참조):
+#       −22.9°(하한) ~ −19.5° :  **−0.67 ~ −0.53 mm = 관통** ← 물리적으로 갈 수 없다
+#       −16.0° ~ +52.7°       :   0.04 ~ 0.16 mm (닿기 직전)
+#   즉 하한 −0.384 는 손바닥을 파고드는 각도인데, 정책은 그 끝단을 에피소드 내내 눌렀고
+#   솔버가 한계를 놓쳐 실측 **−4.075 rad** 까지 밀려났다(hdgp fj_c1 재생, 표본 93% 한계 밖).
+#   SimToolReal 도 같은 처방을 URDF 에 굽는다(`_adjusted_restricted`: 벌림 ±20° → ±2°).
+#   ⚠간극이 전 구간 0.16 mm 이하라 자기충돌을 켜면 cooking inflation 이 이를 삼킨다 —
+#     자기충돌 ON 은 이 축소만으로 안전해지지 않는다(별건).
+#   범위는 **간극이 최대(0.15~0.16 mm)인 대역**에서 리셋 자세 0 을 중심으로 대칭으로 잡는다.
+#   현 과제(컵 grasp-lift)는 엄지 대향각을 크게 쓸 필요가 없다(리셋도 0).
+JOINT_LIMIT_RESTRICTIONS: dict[str, dict[str, tuple[float, float]]] = {
+    "openarm_dg5f-m_bi": {
+        r"[rl]_hj_thumb_1": (-0.16, 0.16),
+    },
+}
+
+
+def restrict_joint_limits(root: ET.Element, asset: str) -> list[str]:
+    """`JOINT_LIMIT_RESTRICTIONS` 로 관절한계를 **좁힌다**(넓히지 않는다)."""
+    rules = JOINT_LIMIT_RESTRICTIONS.get(asset)
+    if not rules:
+        return []
+    changed = []
+    for pattern, (new_lo, new_hi) in rules.items():
+        matched = False
+        for joint in root.findall("joint"):
+            name = joint.get("name") or ""
+            if not re.fullmatch(pattern, name):
+                continue
+            matched = True
+            limit = joint.find("limit")
+            if limit is None:
+                raise RuntimeError(f"{name}: <limit> 이 없다 — 한계 축소 불가")
+            lo, hi = float(limit.get("lower")), float(limit.get("upper"))
+            lo2, hi2 = max(lo, new_lo), min(hi, new_hi)
+            if not lo2 < 0.0 < hi2:
+                raise RuntimeError(
+                    f"{name}: 축소 범위 [{lo2}, {hi2}] 가 영 자세(리셋)를 품지 않는다")
+            limit.set("lower", f"{lo2:g}")
+            limit.set("upper", f"{hi2:g}")
+            changed.append(f"{name} [{lo:.4f},{hi:.4f}]→[{lo2:.4f},{hi2:.4f}]")
+        if not matched:
+            raise RuntimeError(f"관절한계 축소 규칙 '{pattern}' 이 아무 관절도 못 잡았다")
+    return changed
+
+
 DROP_ADDRESSING_FRAMES = ("r_hl_mount", "l_hl_mount", "r_hl_palm_alias", "l_hl_palm_alias")
 
 
@@ -812,7 +861,19 @@ def _compose_origins(outer: ET.Element, inner: ET.Element) -> None:
 
 
 def drop_addressing_frames(root: ET.Element) -> list[str]:
-    """`DROP_ADDRESSING_FRAMES` 링크를 제거하고 그 고정변환을 자식 조인트에 합성한다."""
+    """`DROP_ADDRESSING_FRAMES` 링크를 제거하고 고정변환을 보존한다.
+
+    ★어느 조인트 **이름**을 남기는가가 중요하다. 링크는 소비처가 없어도 그 링크에
+      붙은 조인트 이름은 쓰인다 — `r_hj_mount` 는 fabric 생성기(`gen_fabric_urdfs.py`)와
+      기하 계약 테스트(`test_tesollo_mount_flush_on_link7_flange`)가 이름으로 찾는다.
+      그래서 **항등변환인 쪽을 버리고 변환을 가진 쪽을 남긴다**:
+        mount      : 들어오는 `r_hj_mount`(z 0.0495, yaw −90°) 유지, 나가는 항등 조인트 삭제
+        palm_alias : 들어오는 항등 `r_hj_palm_alias` 삭제, 나가는 `r_hj_palm_ee` 에 합성
+    """
+    def _is_identity(joint: ET.Element) -> bool:
+        xyz, rpy = _origin_of(joint)
+        return max(abs(v) for v in (*xyz, *rpy)) < 1e-9
+
     dropped = []
     for name in DROP_ADDRESSING_FRAMES:
         link = next((l for l in root.findall("link") if l.get("name") == name), None)
@@ -821,17 +882,31 @@ def drop_addressing_frames(root: ET.Element) -> list[str]:
         if link.findall("collision") or link.findall("visual"):
             raise RuntimeError(f"{name}: 지오메트리가 있는 링크는 주소용 프레임이 아니다 — 제거 거부")
         incoming = [j for j in root.findall("joint")
-                    if (j.find("child") is not None
-                        and j.find("child").get("link") == name)]
+                    if j.find("child") is not None and j.find("child").get("link") == name]
+        outgoing = [j for j in root.findall("joint")
+                    if j.find("parent") is not None and j.find("parent").get("link") == name]
         if len(incoming) != 1 or incoming[0].get("type") != "fixed":
             raise RuntimeError(f"{name}: 들어오는 고정관절이 정확히 1개가 아니다 — 제거 거부")
-        parent = incoming[0].find("parent").get("link")
-        for j in root.findall("joint"):
-            pj = j.find("parent")
-            if pj is not None and pj.get("link") == name:
-                _compose_origins(incoming[0], j)
-                pj.set("link", parent)
-        root.remove(incoming[0])
+        j_in = incoming[0]
+        parent = j_in.find("parent").get("link")
+
+        if _is_identity(j_in):
+            # 들어오는 쪽이 잉여 → 버리고, 나가는 조인트들이 부모를 직접 물게 한다.
+            for j in outgoing:
+                _compose_origins(j_in, j)
+                j.find("parent").set("link", parent)
+            root.remove(j_in)
+        else:
+            # 들어오는 조인트 이름을 살린다. 나가는 쪽은 항등이어야 버릴 수 있다.
+            if len(outgoing) != 1:
+                raise RuntimeError(
+                    f"{name}: 변환을 가진 프레임은 자식이 정확히 1개여야 한다(현재 {len(outgoing)})")
+            j_out = outgoing[0]
+            if not _is_identity(j_out):
+                raise RuntimeError(
+                    f"{name}: 앞뒤 조인트가 모두 비항등이라 어느 이름을 남길지 정할 수 없다")
+            j_in.find("child").set("link", j_out.find("child").get("link"))
+            root.remove(j_out)
         root.remove(link)
         dropped.append(name)
     return dropped
@@ -1122,6 +1197,8 @@ def generate_one(name: str, source_path: Path) -> tuple[Path, Path]:
               f"(x{factors['r']:.4f} / x{factors['l']:.4f})")
     head_link_map, head_joint_map = attach_head(root)
     link_map, joint_map = merge_maps((link_map, joint_map), (head_link_map, head_joint_map))
+    for _line in restrict_joint_limits(root, name):
+        print(f"[{name}] 관절한계 축소 {_line}")
     drop_addressing_frames(root)      # ★토큰 질량 부여 **전에** — 없앨 링크에 질량을 줄 이유가 없다
     give_massless_frames_token_mass(root)
     reorder_top_level(root)

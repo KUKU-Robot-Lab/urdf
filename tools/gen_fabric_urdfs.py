@@ -280,7 +280,19 @@ def patch_palm(joints: dict[str, ET.Element], rl: dict[str, dict], side: str) ->
     """palm_link z = wrist->palm chain of the RL URDF (yaw-only chain, z sums).
 
     x/y keep the template values (fabric mount convention)."""
-    chain = [f"{side}_hj_mount", f"{side}_hj_adapter", f"{side}_hj_base", f"{side}_hj_palm"]
+    # ★사슬을 **URDF 에서 유도**한다. 예전에는 [mount, adapter, base, palm] 로 이름을 박아
+    #   두었는데, 2026-09-09 에 항등변환 프레임(`*_hl_adapter` 를 물던 조인트)을 자산에서
+    #   빼자 KeyError 로 죽었다. 토폴로지가 바뀌어도 z 합은 손목→손바닥 그대로여야 한다.
+    by_child = {j["child"]: (name, j) for name, j in rl.items()}
+    chain, current = [], f"{side}_hl_palm"
+    while current in by_child:
+        cname, cj = by_child[current]
+        chain.append(cname)
+        if cj["parent"] == f"{side}_al_7":
+            break
+        current = cj["parent"]
+    else:
+        raise KeyError(f"{side}_al_7 → {side}_hl_palm 사슬을 RL URDF 에서 못 찾았다")
     z_new = float(sum(rl[c]["xyz"][2] for c in chain))
     origin = joints["palm_link_joint"].find("origin")
     assert origin is not None
@@ -356,7 +368,10 @@ def tesollo_joint_map(side: str) -> dict[str, str]:
 
 
 def verify_tesollo(urdf_path: Path, rl: dict, side: str) -> float:
-    frame_pairs = [("palm_link", f"{side}_hl_palm_alias")]
+    # ★2026-09-09: 기준 프레임을 `*_hl_palm_alias` → `*_hl_palm` 으로 옮긴다.
+    #   alias 는 palm 에 대해 **항등변환**이라 위치가 같고(주석에 검증 기록 있음),
+    #   자산에서 제거됐다(주소용 더미 강체 — generate_rl_urdf.DROP_ADDRESSING_FRAMES).
+    frame_pairs = [("palm_link", f"{side}_hl_palm")]
     frame_pairs += [(f"rl_dg_{i}_tip", f"{side}_hl_{finger}_tip")
                     for i, finger in enumerate(FINGERS, start=1)]
     return _fk_compare(parse_urdf(urdf_path), rl, tesollo_joint_map(side), frame_pairs, seed=7)
@@ -391,7 +406,9 @@ def tesollo_link_map(side: str) -> dict[str, str]:
     return mapping
 
 
-PALM_CHAIN = ("mount", "adapter", "base", "palm", "palm_alias", "palm_ee")
+# ★2026-09-09: `mount`·`palm_alias` 는 자산에서 제거된 주소용 더미 프레임이라 뺀다
+#   (질량 1e-5 kg 이라 lumping 결과에도 영향이 없다).
+PALM_CHAIN = ("adapter", "base", "palm", "palm_ee")
 
 
 def build_tesollo(name: str, template: str, rl_asset: str, side: str) -> Path:
@@ -403,9 +420,9 @@ def build_tesollo(name: str, template: str, rl_asset: str, side: str) -> Path:
     patch_hand(joints, rl, side)
     patch_palm(joints, rl, side)
     # masses: vendor (and any measured scaling) from the RL URDF; the palm chain
-    # (adapter/base/palm) is lumped onto palm_link (= *_hl_palm_alias frame)
+    # (adapter/base/palm) is lumped onto palm_link (= *_hl_palm frame)
     sync_inertials(tree.getroot(), rl, parse_inertials(rl_path), tesollo_link_map(side),
-                   {"palm_link": ([f"{side}_hl_{n}" for n in PALM_CHAIN], f"{side}_hl_palm_alias")})
+                   {"palm_link": ([f"{side}_hl_{n}" for n in PALM_CHAIN], f"{side}_hl_palm")})
     for helper in PALM_HELPER_JOINTS:  # convention frames must exist untouched
         assert helper in joints, helper
     urdf_path = write_variant(tree.getroot(), name, f"{rl_asset}.urdf ({side} chain)")
@@ -559,6 +576,16 @@ VARIANTS = {
         "openarm_dg5f-m_bi_right", "openarm_tesollo_sensor_right", "openarm_dg5f-m_bi_rl", "r"),
     "openarm_dg5f-m_bi_left": lambda: build_tesollo(
         "openarm_dg5f-m_bi_left", "openarm_dg5f_left", "openarm_dg5f-m_bi_rl", "l"),
+    # DG-5F short reuses the DG-5F templates: the finger chains are identical
+    # (same names, origins, axes), only the mount/base length differs, and
+    # patch_hand/patch_palm overwrite every hand frame from the RL URDF anyway.
+    # The FK gate (palm + 5 fingertips) is what proves the reuse is valid.
+    "openarm_dg5f-m-short_bi_right": lambda: build_tesollo(
+        "openarm_dg5f-m-short_bi_right", "openarm_tesollo_sensor_right",
+        "openarm_dg5f-m-short_bi_rl", "r"),
+    "openarm_dg5f-m-short_bi_left": lambda: build_tesollo(
+        "openarm_dg5f-m-short_bi_left", "openarm_dg5f_left",
+        "openarm_dg5f-m-short_bi_rl", "l"),
     "openarm_dg5f-s_bi_right": lambda: build_tesollo(
         "openarm_dg5f-s_bi_right", "openarm_tesollo_bi_s", "openarm_dg5f-s_bi_rl", "r"),
     "openarm_dg5f-s_bi_left": lambda: build_tesollo(
