@@ -3,7 +3,7 @@ source_urdf: generated/source/openarm_tesollo_bi.urdf
 generated_urdf: generated/rl/openarm_dg5f-m_bi_rl.urdf
 asset: openarm_dg5f-m_bi_rl
 collision_approximation:
-  default: convex_decomposition
+  default: convex_hull
   convex_hull_links:
   - body_link
   - r_al_0
@@ -114,11 +114,9 @@ kinematic_joint_order:
   - r_aj_5
   - r_aj_6
   - r_aj_7
-  - r_hj_mount
   - r_hj_adapter
   - r_hj_base
   - r_hj_palm
-  - r_hj_palm_alias
   - r_hj_palm_ee
   - r_hj_thumb_1
   - r_hj_thumb_2
@@ -153,11 +151,9 @@ kinematic_joint_order:
   - l_aj_5
   - l_aj_6
   - l_aj_7
-  - l_hj_mount
   - l_hj_adapter
   - l_hj_base
   - l_hj_palm
-  - l_hj_palm_alias
   - l_hj_palm_ee
   - l_hj_thumb_1
   - l_hj_thumb_2
@@ -191,11 +187,9 @@ kinematic_joint_order:
 fixed_joint_order:
   - body_j_base
   - r_aj_base
-  - r_hj_mount
   - r_hj_adapter
   - r_hj_base
   - r_hj_palm
-  - r_hj_palm_alias
   - r_hj_palm_ee
   - r_hj_thumb_tip
   - r_hj_index_tip
@@ -203,11 +197,9 @@ fixed_joint_order:
   - r_hj_ring_tip
   - r_hj_pinky_tip
   - l_aj_base
-  - l_hj_mount
   - l_hj_adapter
   - l_hj_base
   - l_hj_palm
-  - l_hj_palm_alias
   - l_hj_palm_ee
   - l_hj_thumb_tip
   - l_hj_index_tip
@@ -227,11 +219,9 @@ link_order:
   - r_al_5
   - r_al_6
   - r_al_7
-  - r_hl_mount
   - r_hl_adapter
   - r_hl_base
   - r_hl_palm
-  - r_hl_palm_alias
   - r_hl_palm_ee
   - r_hl_thumb_1
   - r_hl_thumb_2
@@ -266,11 +256,9 @@ link_order:
   - l_al_5
   - l_al_6
   - l_al_7
-  - l_hl_mount
   - l_hl_adapter
   - l_hl_base
   - l_hl_palm
-  - l_hl_palm_alias
   - l_hl_palm_ee
   - l_hl_thumb_1
   - l_hl_thumb_2
