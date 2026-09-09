@@ -227,30 +227,68 @@ HAND_MOUNT_NAMES = [name for name in RL_NAMES if "gripper" not in name]
 
 @pytest.mark.parametrize("name", RL_NAMES)
 def test_manifest_collider_policy(name: str) -> None:
-    """OpenArm links -> convex hull; hand links -> decomposition, except HAND_HULL_ASSETS.
+    """collision 근사의 **기본값은 벤더 검증값(hull)**, 벗어나면 사유가 있어야 한다.
 
-    09.05: dexterous hand links kept convex decomposition.
-    ★09.08: `openarm_dg5f-m_bi` moves to `convex_hull` for the whole asset, because the
-    vendor's own Isaac conversion config says `collider_type: convex_hull`
-    (vendor/delto_m_ros2/dg_isaacsim/.../config.yaml). Our decomposition was a non-vendor
-    choice and produced ~710 hand collision shapes, whose deep penetrations drove
-    `r_hj_thumb_1` 3.7 rad past its hard limit under contact.
+    09.05 규약은 반대였다(decomposition 기본 + OpenArm 링크만 hull). 09.09 에 뒤집었다 —
+    벤더 자신의 Isaac 변환 설정이 `collider_type: convex_hull` 이고
+    (vendor/delto_m_ros2/dg_isaacsim/.../config.yaml), decomposition 은 로봇 collision
+    shape 을 731개까지 불려 접촉 임펄스가 관절 한계를 뚫는 원인이 됐다(hull 로 75개).
+    ⇒ **새 자산은 아무것도 선언하지 않으면 hull 이다.** 근거는 docs/ROBOT_ASSET_SPEC.md §1.
     """
     manifest = load_manifest(name)
     policy = manifest["collision_approximation"]
     assert policy["default"] == gen.collider_default(name)
-    if name in gen.HAND_HULL_ASSETS:
-        assert policy["default"] == "convex_hull"
+
+    deviation = gen.COLLIDER_DEVIATIONS.get(name)
+    if deviation is None:
+        assert policy["default"] == gen.DEFAULT_COLLIDER == "convex_hull", (
+            f"{name}: 선언이 없으면 벤더 검증값(hull)이어야 한다")
     else:
-        assert policy["default"] == "convex_decomposition"
+        value, reason = deviation
+        assert policy["default"] == value
+        assert reason.strip(), f"{name}: 벤더 이탈에는 사유가 필요하다"
+
+    # OpenArm 제작 링크(몸통·팔·머리·스톡 그리퍼)는 어느 자산에서든 hull 이다.
     hull = set(policy["convex_hull_links"])
     assert {"body_link", "r_al_1", "l_al_7", "head_base"} <= hull
     assert all(link.startswith(gen.OPENARM_HULL_LINK_PREFIXES) for link in hull)
     if "gripper" in name:
         assert {"r_hl_gripper_base", "l_hl_gripper_left_finger"} <= hull
-    else:
-        assert not any("_hl_" in link for link in hull)
     assert manifest["asset"] == f"{name}_rl"
+
+
+def test_every_asset_declares_a_joint_limit_policy() -> None:
+    """자산은 관절한계 방침을 **명시적으로** 선언해야 한다(빈 dict 허용, 미등록은 에러).
+
+    벤더 URDF 한계는 자기관통 없는 가동 범위를 보장하지 않는다 — `_3/_4` 는 두 벤더 사본이
+    똑같이 ±1.5708(대칭 ±90°)을 주는 placeholder 이고, `thumb_1` 하한은 손바닥을 0.67 mm
+    파고드는 각도다. "아직 안 쟀다"와 "잴 필요가 없다"를 구분해 남기기 위한 강제다.
+    """
+    missing = [n for n in gen.SOURCES if n not in gen.JOINT_LIMIT_RESTRICTIONS]
+    assert not missing, (
+        f"JOINT_LIMIT_RESTRICTIONS 미등록: {missing} — 빈 dict 라도 선언할 것 "
+        "(docs/ROBOT_ASSET_SPEC.md §2)")
+
+
+def test_addressing_frames_are_detected_by_rule_not_by_name() -> None:
+    """주소용 프레임 제거는 **규칙**이어야 한다 — 새 로봇에도 그대로 적용되도록.
+
+    지오메트리 없음 + 들어오는 고정관절 1개 + 앞뒤 중 하나가 항등변환 → 제거 대상.
+    이름으로 참조되는 프레임은 KEEP_ADDRESSING_FRAMES 가 보존한다.
+    """
+    import xml.etree.ElementTree as ET
+
+    root = ET.parse(gen.OUT_DIR / "openarm_dg5f-m_bi_rl.urdf").getroot()
+    links = {l.get("name") for l in root.findall("link")}
+    # 제거됐어야 하는 것(항등변환 더미)
+    assert not {"r_hl_mount", "l_hl_mount", "r_hl_palm_alias", "l_hl_palm_alias"} & links
+    # 보존됐어야 하는 것(이름으로 참조된다)
+    assert {"r_hl_palm_ee", "l_hl_palm_ee"} <= links
+    # 재실행해도 더 제거할 것이 없어야 한다(멱등)
+    assert gen.find_addressing_frames(root) == []
+    # 사라진 링크의 고정변환을 자식이 흡수했는지 — 조인트 이름은 살아 있어야 한다
+    joints = {j.get("name") for j in root.findall("joint")}
+    assert "r_hj_mount" in joints, "변환을 가진 조인트 이름은 남아야 한다(fabric 생성기가 쓴다)"
 
 
 def test_gripper_asset_action_and_mimic() -> None:

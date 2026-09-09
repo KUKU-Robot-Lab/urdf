@@ -178,13 +178,6 @@
       <inertia ixx="0.000639" ixy="1e-06" ixz="1e-06" iyy="0.000497" iyz="8.9e-05" izz="0.000342" />
     </inertial>
   </link>
-  <link name="r_hl_mount">
-    <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <mass value="1e-05" />
-      <inertia ixx="1e-07" ixy="0" ixz="0" iyy="1e-07" iyz="0" izz="1e-07" />
-    </inertial>
-  </link>
   <link name="r_hl_adapter">
     <inertial>
       <origin rpy="0 0 0" xyz="-6.4721E-09 -2.1674E-05 0.0049997" />
@@ -234,13 +227,6 @@
         <mesh filename="file:///home/user/rl_ws/urdf/vendor/tesollo_model/dg5fs/meshes/dg5fs_right/link_base.STL" />
       </geometry>
     </collision>
-  </link>
-  <link name="r_hl_palm_alias">
-    <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <mass value="1e-05" />
-      <inertia ixx="1e-07" ixy="0" ixz="0" iyy="1e-07" iyz="0" izz="1e-07" />
-    </inertial>
   </link>
   <link name="r_hl_palm_ee">
     <inertial>
@@ -876,13 +862,6 @@
       <inertia ixx="0.000639" ixy="1e-06" ixz="1e-06" iyy="0.000497" iyz="8.9e-05" izz="0.000342" />
     </inertial>
   </link>
-  <link name="l_hl_mount">
-    <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <mass value="1e-05" />
-      <inertia ixx="1e-07" ixy="0" ixz="0" iyy="1e-07" iyz="0" izz="1e-07" />
-    </inertial>
-  </link>
   <link name="l_hl_adapter">
     <inertial>
       <origin rpy="0 0 0" xyz="6.4721E-09 2.1674E-05 0.0049997" />
@@ -932,13 +911,6 @@
         <mesh filename="file:///home/user/rl_ws/urdf/vendor/tesollo_model/dg5fs/meshes/dg5fs_left/link_base.STL" />
       </geometry>
     </collision>
-  </link>
-  <link name="l_hl_palm_alias">
-    <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <mass value="1e-05" />
-      <inertia ixx="1e-07" ixy="0" ixz="0" iyy="1e-07" iyz="0" izz="1e-07" />
-    </inertial>
   </link>
   <link name="l_hl_palm_ee">
     <inertial>
@@ -1547,13 +1519,8 @@
   </joint>
   <joint name="r_hj_mount" type="fixed">
     <parent link="r_al_7" />
-    <child link="r_hl_mount" />
-    <origin rpy="0 0 -1.5707964" xyz="0 0.0000003 0.0495" />
-  </joint>
-  <joint name="r_hj_adapter" type="fixed">
-    <origin rpy="0 0 0" xyz="0 0 0" />
-    <parent link="r_hl_mount" />
     <child link="r_hl_adapter" />
+    <origin rpy="0 0 -1.5707964" xyz="0 0.0000003 0.0495" />
   </joint>
   <joint name="r_hj_base" type="fixed">
     <origin rpy="0 0 0" xyz="0 0 0.004" />
@@ -1566,15 +1533,10 @@
     <child link="r_hl_palm" />
     <axis xyz="0 0 0" />
   </joint>
-  <joint name="r_hj_palm_alias" type="fixed">
-    <parent link="r_hl_palm" />
-    <child link="r_hl_palm_alias" />
-    <origin rpy="0 0 0" xyz="0 0 0" />
-  </joint>
   <joint name="r_hj_palm_ee" type="fixed">
-    <parent link="r_hl_palm_alias" />
+    <parent link="r_hl_palm" />
     <child link="r_hl_palm_ee" />
-    <origin rpy="0 0 0" xyz="0.028 0 0.04" />
+    <origin rpy="0 -0 0" xyz="0.028 0 0.04" />
   </joint>
   <joint name="r_hj_thumb_1" type="revolute">
     <origin rpy="1.5708 0 1.5708" xyz="0.0017 0.018 0.0298" />
@@ -1802,13 +1764,8 @@
   </joint>
   <joint name="l_hj_mount" type="fixed">
     <parent link="l_al_7" />
-    <child link="l_hl_mount" />
-    <origin rpy="0 0 1.5707964" xyz="0 0 0.0495" />
-  </joint>
-  <joint name="l_hj_adapter" type="fixed">
-    <origin rpy="0 0 0" xyz="0 0 0" />
-    <parent link="l_hl_mount" />
     <child link="l_hl_adapter" />
+    <origin rpy="0 0 1.5707964" xyz="0 0 0.0495" />
   </joint>
   <joint name="l_hj_base" type="fixed">
     <origin rpy="0 0 0" xyz="0 0 0.004" />
@@ -1821,15 +1778,10 @@
     <child link="l_hl_palm" />
     <axis xyz="0 0 0" />
   </joint>
-  <joint name="l_hj_palm_alias" type="fixed">
-    <parent link="l_hl_palm" />
-    <child link="l_hl_palm_alias" />
-    <origin rpy="0 0 0" xyz="0 0 0" />
-  </joint>
   <joint name="l_hj_palm_ee" type="fixed">
-    <parent link="l_hl_palm_alias" />
+    <parent link="l_hl_palm" />
     <child link="l_hl_palm_ee" />
-    <origin rpy="0 0 0" xyz="0.028 0 0.04" />
+    <origin rpy="0 -0 0" xyz="0.028 0 0.04" />
   </joint>
   <joint name="l_hj_thumb_1" type="revolute">
     <origin rpy="-1.5708 0 -1.5708" xyz="0.0017 -0.018 0.0298" />

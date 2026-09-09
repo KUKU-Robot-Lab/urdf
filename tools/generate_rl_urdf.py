@@ -141,22 +141,41 @@ BODY_TOP_CROP_Z = HEAD_MOUNT_Z + _load_head_base_plate_bottom_z()
 # manifest (`collision_approximation`) so tools/build_usd.py never guesses.
 OPENARM_HULL_LINK_PREFIXES = ("body_link", "head_", "r_al_", "l_al_", "r_hl_gripper_", "l_hl_gripper_")
 
-# ★★2026-09-08 — 손도 convex hull 로 굽는 자산. 근거는 **벤더 자신의 Isaac 변환 설정**이다:
-#   vendor/delto_m_ros2/dg_isaacsim/dg5f_telop/rb10_1300e_dg5f_{left,right}/config.yaml
-#   = Tesollo 가 덤프한 `UrdfConverterCfg` 이고 `collider_type: convex_hull` 로 되어 있다.
-#   09.05 에 우리가 고른 `convex_decomposition` 은 **비벤더 선택**이었고, 그 결과 손 두 개가
-#   collision shape ~710개(로봇 전체 731, 런타임 `max_shapes` 실측)를 차지했다. 조각 경계의
-#   깊은 관통 → 큰 depenetration 임펄스 → **관절 한계 돌파**로 이어졌다: `r_hj_thumb_1` 이
-#   접촉 중 하한 −0.384 를 넘어 **−4.075 rad** 까지 밀려나고 되돌아오지 않는다(표본 93%).
-#   지령은 늘 한계 안이므로 정책 문제가 아니다. 계측 도구는
-#   hdgp `scripts/analysis/fj_joint_limit_viol.py`.
-#   ⚠자산별로 갈라 적용한다(사용자 확정: DG-5F-M 먼저). 나머지 자산은 검증 후 판단.
-HAND_HULL_ASSETS = ("openarm_dg5f-m_bi",)
+# ★★2026-09-09 **기본 골자**: collision 근사의 기본값은 **벤더가 검증한 구성**이다.
+#   근거는 벤더 자신의 Isaac 변환 설정 — Tesollo 가 덤프한 `UrdfConverterCfg`:
+#     vendor/delto_m_ros2/dg_isaacsim/dg5f_telop/rb10_1300e_dg5f_{left,right}/config.yaml
+#     → `collider_type: convex_hull`
+#   09.05 에 우리가 고른 `convex_decomposition` 은 비벤더 선택이었고, 그 결과 손 두 개가
+#   로봇 collision shape 731개 중 ~710개를 차지했다. hull 로 굽자 **75개**가 됐고 부팅
+#   PhysX contact-buffer overflow 가 사라졌으며, 자기충돌을 켤 수 있는 전제가 됐다.
+#
+#   ⇒ **새 로봇은 아무것도 선언하지 않으면 hull 로 만들어진다.** decomposition 이 필요한
+#     자산만 사유와 함께 아래에 등록한다(사유 없는 등록은 금지 — 왜 벤더에서 벗어나는지가
+#     자산과 함께 남아야 한다).
+DEFAULT_COLLIDER = "convex_hull"
+COLLIDER_DEVIATIONS: dict[str, tuple[str, str]] = {
+    "openarm_rh56f1_bi": (
+        "convex_decomposition",
+        "self_collision_allowlist 의 `accept_raw` 항목들이 decomposition 임포트를 전제로 "
+        "수용된 것이다(RH56F1 은 껍데기가 겹치는 설계). hull 로 바꾸려면 그 전제부터 재측정.",
+    ),
+    "openarm_gripper_bi": (
+        "convex_decomposition",
+        "좌 그리퍼 조는 **파지 도구**라 hull 이 되면 개구(84.5mm 실측)와 파지 대역"
+        "(10~85mm)이 무효가 된다(write_collider_manifest.py 도크). 09.09 미검증 — 보류.",
+    ),
+}
 
 
 def collider_default(asset: str) -> str:
-    """자산의 기본 collision 근사. 손까지 hull 인 자산은 importer 단계에서 바로 hull 로 굽는다."""
-    return "convex_hull" if asset in HAND_HULL_ASSETS else "convex_decomposition"
+    """자산의 collision 근사. 기본은 벤더 검증값(hull), 벗어나면 사유가 있어야 한다."""
+    deviation = COLLIDER_DEVIATIONS.get(asset)
+    if deviation is None:
+        return DEFAULT_COLLIDER
+    value, reason = deviation
+    if not reason.strip():
+        raise RuntimeError(f"{asset}: COLLIDER_DEVIATIONS 항목에 사유가 없다 — 벤더 이탈은 사유 필수")
+    return value
 
 
 def convex_hull_links(root: ET.Element) -> list[str]:
@@ -767,40 +786,38 @@ def scale_hand_masses(root: ET.Element, target_kg: float) -> dict[str, float]:
     return factors
 
 
-# ★★2026-09-09 — 벤더에 없는 **순수 주소지정용 프레임**을 RL 자산에서 뺀다.
-#   벤더 손은 28링크(`rl_dg_{mount,base,palm}` + 5×`_1.._4,_tip`)인데 우리는 31링크였다.
-#   추가분 셋 중 둘은 **변환이 항등**이라 기구학적으로 아무 일도 안 하면서 1e-5 kg 강체만
-#   늘린다 — `r_hl_mount`(→adapter 가 0,0,0) 와 `r_hl_palm_alias`(→palm_ee 가 0,0,0).
-#   PhysX 는 무질량 강체를 만들 수 없어(1 kg 유령) 토큰 질량을 줄 수밖에 없으므로,
-#   "sim 에서 무질량·무접촉" 을 실제로 얻는 방법은 **링크를 없애는 것**뿐이다(사용자 확정).
-#   `*_hl_palm_ee` 는 오프셋(0.028,0,0.04)이 있고 `robots.py` 가 `palm_ee_body` 로 쓰므로 남긴다.
-# ★★2026-09-09 실측 기반 **관절한계 축소**(사용자 확정: thumb_1 은 보수적으로 고정).
-#   벤더 URDF 의 `_hj_thumb_1` 명목 범위 [−0.384, +0.890] 은 **실제 가동 범위를 과장한다**.
-#   엄지↔손바닥/베이스 raw 메시 간극을 각도별로 재면(도구: tools/audit_self_collision.py
-#   의 penetration API, 산출 표는 커밋 메시지 참조):
-#       −22.9°(하한) ~ −19.5° :  **−0.67 ~ −0.53 mm = 관통** ← 물리적으로 갈 수 없다
-#       −16.0° ~ +52.7°       :   0.04 ~ 0.16 mm (닿기 직전)
-#   즉 하한 −0.384 는 손바닥을 파고드는 각도인데, 정책은 그 끝단을 에피소드 내내 눌렀고
-#   솔버가 한계를 놓쳐 실측 **−4.075 rad** 까지 밀려났다(hdgp fj_c1 재생, 표본 93% 한계 밖).
-#   SimToolReal 도 같은 처방을 URDF 에 굽는다(`_adjusted_restricted`: 벌림 ±20° → ±2°).
-#   ⚠간극이 전 구간 0.16 mm 이하라 자기충돌을 켜면 cooking inflation 이 이를 삼킨다 —
-#     자기충돌 ON 은 이 축소만으로 안전해지지 않는다(별건).
-#   범위는 **간극이 최대(0.15~0.16 mm)인 대역**에서 리셋 자세 0 을 중심으로 대칭으로 잡는다.
-#   현 과제(컵 grasp-lift)는 엄지 대향각을 크게 쓸 필요가 없다(리셋도 0).
+# ★★2026-09-09 **기본 골자**: 자산은 관절한계 방침을 **명시적으로 선언**해야 한다.
+#   벤더 URDF 한계가 실제 가동 범위를 보장하지 않는다는 것이 09.09 에 확인됐다:
+#     · `_3/_4` 는 CAD·드라이버 두 사본이 **똑같이 ±1.5708**(대칭 ±90°)을 준다 — 실제
+#       PIP/DIP 가 뒤로 90° 젖혀질 리 없으므로 placeholder 다(플랫 effort 7.5 와 같은 성격).
+#     · `thumb_1` 하한 −0.384 는 엄지가 손바닥/베이스를 **0.67 mm 파고드는** 각도다.
+#   그 한계를 그대로 쓰면 정책이 도달 불가능한 자세를 명령하고, 접촉이 관절을 한계 밖으로
+#   밀어낸다(실측 thumb_1 −4.075 rad, 표본 93% 한계 밖).
+#   ⇒ 자산을 추가할 때 **빈 dict 라도 반드시 등록**한다. 미등록은 빌드 에러다 —
+#     "아직 안 쟀다"와 "잴 필요가 없다"를 구분해서 남기기 위해서다.
+#   측정 방법은 docs/ROBOT_ASSET_SPEC.md §2-1. 요지는 둘이다:
+#     ①다른 관절은 **0(편 상태)** 로 두고 하나씩 굽힌다(이웃을 극단에 고정하면 조합을 잰다).
+#     ②같은 손가락 안쪽 **2-hop 쌍**(`_2↔_4`,`_2↔tip`)을 포함한다 — PhysX 자동 필터는
+#       직접 연결된 부모-자식뿐이고, 굴곡 한계를 정하는 건 그 2-hop 쌍이다.
 JOINT_LIMIT_RESTRICTIONS: dict[str, dict[str, tuple[float, float]]] = {
+    # 아직 측정하지 않은 자산 — 벤더 한계를 그대로 쓴다(자기관통 여부 미검증).
+    "openarm_dg5f-m-short_bi": {},
+    "openarm_dg5f-s_bi": {},
+    "openarm_rh56f1_bi": {},
+    "openarm_gripper_bi": {},
     "openarm_dg5f-m_bi": {
-        # ① 벌림/대향 `_1` 5개 — 사용자 확정 2026-09-09: "무조건 옆 손가락을 침범한다".
-        #    엄지는 실측으로도 하한 −22.9° 가 베이스를 0.67 mm 파고든다. 리셋이 전부 0 이고
+        # ① 벌림/대향 `_1` 5개 — 사용자 확정: "무조건 옆 손가락을 침범한다".
+        #    엄지는 실측으로도 하한 −22.9° 가 베이스를 0.67 mm 파고든다. 리셋은 전부 0 이고
         #    현 과제(컵 grasp-lift)는 벌림을 크게 안 쓴다. ⚠`pinky_1` 은 외전이 아니라
         #    Z-flex(대향축)라 성격이 다르다 — 같은 폭을 적용했으니 필요하면 여기만 분리할 것.
         r"[rl]_hj_(thumb|index|middle|ring|pinky)_1": (-0.16, 0.16),
         # ② 엄지 굴곡 상한 — 다른 관절을 편 채 `_3=_4` 를 훑은 실측:
         #    0~1.05 rad 은 간극 0.15 mm 유지, **1.20 rad(68.8°)부터 tip↔palm 이 4.95 mm 관통**.
-        #    네 손가락은 1.571 까지 5~8 mm 간극이 남아 벤더값을 그대로 둔다(축소 규칙 없음).
+        #    네 손가락은 1.571 까지 5.2~8.4 mm 간극이 남아 벤더값을 그대로 둔다.
         r"[rl]_hj_thumb_[34]": (0.0, 1.05),
         # ③ `_3/_4` 하한 0 — 액션 범위는 이미 override 로 0 이었지만 **물리 한계는 ±1.571**
-        #    이라 접촉이 관절을 음수로 밀 수 있었다(c 시리즈 실측 `index_3` −1.16 rad =
-        #    손가락이 66° 뒤로 꺾임). 정책이 명령할 수 없는 자세를 물리가 만들지 못하게 한다.
+        #    이라 접촉이 관절을 음수로 밀 수 있었다(실측 `index_3` −1.16 rad = 66° 뒤로 꺾임).
+        #    정책이 명령할 수 없는 자세를 물리가 만들지 못하게 한다.
         r"[rl]_hj_(index|middle|ring|pinky)_[34]": (0.0, 1.5708),
     },
 }
@@ -808,7 +825,12 @@ JOINT_LIMIT_RESTRICTIONS: dict[str, dict[str, tuple[float, float]]] = {
 
 def restrict_joint_limits(root: ET.Element, asset: str) -> list[str]:
     """`JOINT_LIMIT_RESTRICTIONS` 로 관절한계를 **좁힌다**(넓히지 않는다)."""
-    rules = JOINT_LIMIT_RESTRICTIONS.get(asset)
+    if asset not in JOINT_LIMIT_RESTRICTIONS:
+        raise RuntimeError(
+            f"{asset}: JOINT_LIMIT_RESTRICTIONS 에 항목이 없다 — 빈 dict 라도 선언할 것.\n"
+            "  벤더 URDF 한계는 자기관통 없는 가동 범위를 보장하지 않는다(09.09 실측).\n"
+            "  아직 안 쟀으면 `{}` 로 등록하고 그 사실을 남긴다.")
+    rules = JOINT_LIMIT_RESTRICTIONS[asset]
     if not rules:
         return []
     changed = []
@@ -824,7 +846,7 @@ def restrict_joint_limits(root: ET.Element, asset: str) -> list[str]:
                 raise RuntimeError(f"{name}: <limit> 이 없다 — 한계 축소 불가")
             lo, hi = float(limit.get("lower")), float(limit.get("upper"))
             lo2, hi2 = max(lo, new_lo), min(hi, new_hi)
-            # 리셋(영 자세)이 **닫힌 구간 안**에 있어야 한다. 경계는 정상이다 —
+            # 리셋(영 자세)이 **닫힌 구간 안**이면 된다. 경계는 정상 —
             # `_3/_4` 는 하한을 정확히 0 으로 잡는 것이 의도다(손등 과신전 차단).
             if not (lo2 <= 0.0 <= hi2) or lo2 >= hi2:
                 raise RuntimeError(
@@ -837,7 +859,51 @@ def restrict_joint_limits(root: ET.Element, asset: str) -> list[str]:
     return changed
 
 
-DROP_ADDRESSING_FRAMES = ("r_hl_mount", "l_hl_mount", "r_hl_palm_alias", "l_hl_palm_alias")
+# ★★2026-09-09 **기본 골자**: 벤더에 없는 **순수 주소지정용 프레임**은 자동으로 뺀다.
+#   조건 — ①지오메트리(visual/collision)가 없고 ②들어오는 고정관절이 정확히 1개이며
+#   ③앞뒤 조인트 중 하나가 **항등변환**이다. 이런 링크는 기구학적으로 아무 일도 하지
+#   않으면서 PhysX 강체만 하나 늘린다. 무질량 강체는 만들 수 없어(1 kg 유령) 토큰 질량
+#   1e-5 kg 을 줄 수밖에 없고, 그러면 팔(0.47kg)↔손(1.76kg) 체인에 10⁵ 질량비가 낀다.
+#   "sim 에서 무질량·무접촉"을 실제로 얻는 방법은 **링크를 없애는 것**뿐이다(사용자 확정).
+#
+#   ⚠**링크는 소비처가 없어도 조인트 이름은 쓰인다.** `r_hj_mount` 를 fabric 생성기와
+#     기하 계약 테스트가 이름으로 찾고 있었다(09.09 에 40 errors 로 드러남). 그래서
+#     앞뒤 조인트 중 **항등인 쪽을 버리고 변환을 가진 쪽 이름을 남긴다.**
+#   ⚠이름으로 참조되는 프레임은 `KEEP_ADDRESSING_FRAMES` 에 등록해 보존한다.
+KEEP_ADDRESSING_FRAMES = (
+    # `robots.py` 가 `palm_ee_body` 로 쓴다. 오프셋(0.028,0,0.04)이 있는 실제 프레임이다.
+    "r_hl_palm_ee", "l_hl_palm_ee",
+    # 카메라 뷰 원점 — 매니페스트 `camera_view_frame` 이 이름으로 참조한다.
+    "head_cam_view",
+)
+
+
+def find_addressing_frames(root: ET.Element) -> list[str]:
+    """제거 대상 주소용 프레임을 **규칙으로** 찾는다(이름 하드코딩 금지)."""
+    def _identity(joint: ET.Element) -> bool:
+        xyz, rpy = _origin_of(joint)
+        return max(abs(v) for v in (*xyz, *rpy)) < 1e-9
+
+    found = []
+    for link in root.findall("link"):
+        name = link.get("name") or ""
+        if name in KEEP_ADDRESSING_FRAMES:
+            continue
+        if link.findall("collision") or link.findall("visual"):
+            continue
+        incoming = [j for j in root.findall("joint")
+                    if j.find("child") is not None and j.find("child").get("link") == name]
+        if len(incoming) != 1 or incoming[0].get("type") != "fixed":
+            continue                       # 루트 링크·가동관절 자식은 대상이 아니다
+        outgoing = [j for j in root.findall("joint")
+                    if j.find("parent") is not None and j.find("parent").get("link") == name]
+        if not outgoing:
+            continue                       # 말단 프레임은 남긴다(이름으로 쓰일 수 있다)
+        if _identity(incoming[0]) or (len(outgoing) == 1 and _identity(outgoing[0])):
+            found.append(name)
+    return found
+
+
 
 
 def _origin_of(joint: ET.Element) -> tuple[list[float], list[float]]:
@@ -875,7 +941,7 @@ def _compose_origins(outer: ET.Element, inner: ET.Element) -> None:
 
 
 def drop_addressing_frames(root: ET.Element) -> list[str]:
-    """`DROP_ADDRESSING_FRAMES` 링크를 제거하고 고정변환을 보존한다.
+    """`find_addressing_frames()` 가 찾은 링크를 제거하고 고정변환을 보존한다.
 
     ★어느 조인트 **이름**을 남기는가가 중요하다. 링크는 소비처가 없어도 그 링크에
       붙은 조인트 이름은 쓰인다 — `r_hj_mount` 는 fabric 생성기(`gen_fabric_urdfs.py`)와
@@ -889,7 +955,7 @@ def drop_addressing_frames(root: ET.Element) -> list[str]:
         return max(abs(v) for v in (*xyz, *rpy)) < 1e-9
 
     dropped = []
-    for name in DROP_ADDRESSING_FRAMES:
+    for name in find_addressing_frames(root):
         link = next((l for l in root.findall("link") if l.get("name") == name), None)
         if link is None:
             continue
