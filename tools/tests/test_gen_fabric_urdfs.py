@@ -20,6 +20,8 @@ import gen_fabric_urdfs as gen  # noqa: E402
 EXPECTED_CSPACE = {
     "openarm_dg5f-m_bi_right": 27,
     "openarm_dg5f-m_bi_left": 27,
+    "openarm_dg5f-m-short_bi_right": 27,
+    "openarm_dg5f-m-short_bi_left": 27,
     "openarm_dg5f-s_bi_right": 27,
     "openarm_dg5f-s_bi_left": 27,
     "openarm_gripper_bi_right": 7,

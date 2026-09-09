@@ -17,8 +17,8 @@ for every non-adjacent pair, in two modes:
         enforces this). Notable ones are documented with reasons in
         tools/self_collision_allowlist.yaml.
 
-Pairs whose raw meshes cannot be made watertight (even after hole filling)
-cannot be disproven and FAIL conservatively.
+Pairs whose raw meshes cannot be made watertight (even after merging duplicate
+vertices and filling holes) cannot be disproven and FAIL conservatively.
 
 Zero pose alone is a blind spot: a pair can be clear at zero but approach
 within cooking-inflation range only at a task home (measured: the sensor
@@ -111,6 +111,17 @@ def _index_geometry(key, raw) -> LocalGeom:
     import trimesh
 
     if not raw.is_watertight:
+        # Vendor STLs routinely carry duplicate vertices a few nanometres apart,
+        # which splits the surface into sheets that fill_holes() cannot close -
+        # the tessellator emitted the same corner twice. Collapsing at 1um
+        # (three orders below the tightest clearance this audit reports) closes
+        # them without moving geometry: measured 0.00000mm vertex deviation and
+        # identical bounds on all 13 meshes it repairs. Without it the audit
+        # cannot measure the mesh at all and FAILs the pair conservatively.
+        raw.merge_vertices(digits_vertex=6)
+        raw.update_faces(raw.nondegenerate_faces())
+        raw.update_faces(raw.unique_faces())
+        raw.remove_unreferenced_vertices()
         raw.fill_holes()
     raw_query = trimesh.proximity.ProximityQuery(raw) if raw.is_watertight else None
     hull = raw.convex_hull

@@ -258,15 +258,15 @@ def test_manifest_collider_policy(name: str) -> None:
 
 
 def test_every_asset_declares_a_joint_limit_policy() -> None:
-    """자산은 관절한계 방침을 **명시적으로** 선언해야 한다(빈 dict 허용, 미등록은 에러).
+    """자산은 손 관절 사양 출처를 **명시적으로** 선언해야 한다(None 허용, 미등록은 에러).
 
-    벤더 URDF 한계는 자기관통 없는 가동 범위를 보장하지 않는다 — `_3/_4` 는 두 벤더 사본이
-    똑같이 ±1.5708(대칭 ±90°)을 주는 placeholder 이고, `thumb_1` 하한은 손바닥을 0.67 mm
-    파고드는 각도다. "아직 안 쟀다"와 "잴 필요가 없다"를 구분해 남기기 위한 강제다.
+    벤더가 같은 값을 두 곳에서 다르게 준다 — 드라이버 URDF 의 effort 7.5 N·m / velocity π 는
+    placeholder 로 보이고, 사용자 매뉴얼 §3.1 은 peak 2.0 N·m / 75 RPM 이다. 가동범위도 7개
+    관절이 어긋난다. "매뉴얼과 대조했다"와 "아직 안 했다"를 구분해 남기기 위한 강제다.
     """
-    missing = [n for n in gen.SOURCES if n not in gen.JOINT_LIMIT_RESTRICTIONS]
+    missing = [n for n in gen.SOURCES if n not in gen.HAND_JOINT_SPEC]
     assert not missing, (
-        f"JOINT_LIMIT_RESTRICTIONS 미등록: {missing} — 빈 dict 라도 선언할 것 "
+        f"HAND_JOINT_SPEC 미등록: {missing} — None 이라도 선언할 것 "
         "(docs/ROBOT_ASSET_SPEC.md §2)")
 
 
@@ -361,3 +361,133 @@ def test_tesollo_mount_flush_on_link7_flange(name: str) -> None:
     for joint_name in mounts:
         _, _, z = origin_xyz(joints[joint_name])
         assert abs(z - gen.LINK7_FLANGE_Z) < 1e-9, (name, joint_name, z)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 09.09 손 관절 사양을 **벤더 공식 매뉴얼**로 설정한다 (DG5F_User_Manual v1.1.4)
+#   벤더가 같은 값을 두 곳에서 다르게 준다: 드라이버 URDF 와 사용자 매뉴얼 §3.1/§3.3.1 이
+#   **7개 관절·effort·velocity 에서 어긋난다**. 매뉴얼이 공식 제품 사양이므로 그쪽이 기준이다.
+#     effort   URDF 7.5 N·m  vs  매뉴얼 peak 2.0 N·m      (3.75배 과대)
+#     velocity URDF 3.142 rad/s vs 매뉴얼 75 RPM=7.854     (2.5배 과소)
+#     thumb_1  URDF -22~+51°  vs  매뉴얼 -22~+77°          (엄지 대향 26° 손실)
+# ══════════════════════════════════════════════════════════════════════════════
+def test_hand_spec_table_is_declared_per_asset():
+    """미등록 자산은 빌드 에러여야 한다 — 조용히 벤더 URDF placeholder 를 쓰면 안 된다."""
+    src = (TOOLS_DIR / "generate_rl_urdf.py").read_text(encoding="utf-8")
+    assert "HAND_JOINT_SPEC" in src, "손 관절 사양 표가 없다"
+    assert "HAND_JOINT_SPEC 에 항목이 없다" in src, "미등록 자산이 빌드 에러가 아니다"
+
+
+def test_manual_effort_and_velocity_land_in_generated_urdf():
+    """생성 URDF 의 손 20관절 effort=2.0 · velocity=7.854 (매뉴얼 §3.1)."""
+    import re
+    p = TOOLS_DIR.parent / "generated" / "rl" / "openarm_dg5f-m_bi_rl.urdf"
+    if not p.is_file():
+        import pytest
+        pytest.skip(f"자산 미생성: {p}")
+    t = p.read_text(encoding="utf-8")
+    bad = []
+    for m in re.finditer(r'<joint name="([rl]_hj_[^"]+)"[^>]*>(.*?)</joint>', t, re.S):
+        a = re.search(r"<limit([^/>]*)", m.group(2))
+        if not a:
+            continue
+        eff = float(re.search(r'effort="([^"]+)"', a.group(1)).group(1))
+        vel = float(re.search(r'velocity="([^"]+)"', a.group(1)).group(1))
+        if abs(eff - 2.0) > 1e-6 or abs(vel - 7.854) > 1e-3:
+            bad.append(f"{m.group(1)} eff={eff} vel={vel}")
+    assert not bad, f"매뉴얼 effort/velocity 가 안 실렸다: {bad[:5]}"
+
+
+def test_manual_joint_ranges_land_in_generated_urdf():
+    """매뉴얼 §3.3.1 가동범위가 그대로 실려야 한다.
+
+    ★`thumb_2` 만 부호가 반대다 — 매뉴얼 0~+155°, 우리 URDF 프레임은 굴곡이 음수라
+      -155~0 으로 옮긴다. 나머지 19관절은 부호 규약이 같다.
+    ★과신전(`_3/_4` 음수)은 **자산에서 허용**한다. 실기가 실제로 되기 때문이다.
+      정책이 그걸 명령하지 못하게 막는 것은 프로필의 `hand_action_limit_override` 몫이고,
+      물리 한계와 액션 범위는 서로 다른 층이다(09.09 사용자 확정).
+    """
+    import math
+    import re
+    p = TOOLS_DIR.parent / "generated" / "rl" / "openarm_dg5f-m_bi_rl.urdf"
+    if not p.is_file():
+        import pytest
+        pytest.skip(f"자산 미생성: {p}")
+    expect_deg = {
+        "thumb_1": (-22, 77), "thumb_2": (-155, 0), "thumb_3": (-90, 90), "thumb_4": (-90, 90),
+        "index_1": (-31, 20), "index_2": (0, 115), "index_3": (-90, 90), "index_4": (-90, 90),
+        "middle_1": (-30, 30), "middle_2": (0, 115), "middle_3": (-90, 90), "middle_4": (-90, 90),
+        "ring_1": (-15, 32), "ring_2": (0, 110), "ring_3": (-90, 90), "ring_4": (-90, 90),
+        "pinky_1": (0, 60), "pinky_2": (-15, 90), "pinky_3": (-90, 90), "pinky_4": (-90, 90),
+    }
+    t = p.read_text(encoding="utf-8")
+    bad = []
+    for m in re.finditer(r'<joint name="r_hj_([a-z]+_\d)"[^>]*>(.*?)</joint>', t, re.S):
+        key = m.group(1)
+        if key not in expect_deg:
+            continue
+        a = re.search(r"<limit([^/>]*)", m.group(2)).group(1)
+        lo = math.degrees(float(re.search(r'lower="([^"]+)"', a).group(1)))
+        hi = math.degrees(float(re.search(r'upper="([^"]+)"', a).group(1)))
+        el, eh = expect_deg[key]
+        if abs(lo - el) > 0.5 or abs(hi - eh) > 0.5:
+            bad.append(f"{key}: {lo:+.1f}~{hi:+.1f} (기대 {el:+.0f}~{eh:+.0f})")
+    assert len(expect_deg) and not bad, f"매뉴얼 가동범위 불일치: {bad}"
+
+
+def test_thumb_opposition_range_is_restored():
+    """★엄지 대향(`thumb_1`)이 잘려 있으면 인벨롭 파지가 원리적으로 안 된다.
+
+    09.09 까지 ±9.2° 로 잘려 있었다(매뉴얼 -22~+77° 의 19%). 엄지가 손가락 쪽으로
+    돌아오지 못하면 감싸 쥘 수 없다 — 이 테스트가 그 회귀를 막는다.
+    """
+    import math
+    import re
+    p = TOOLS_DIR.parent / "generated" / "rl" / "openarm_dg5f-m_bi_rl.urdf"
+    if not p.is_file():
+        import pytest
+        pytest.skip(f"자산 미생성: {p}")
+    t = p.read_text(encoding="utf-8")
+    m = re.search(r'<joint name="r_hj_thumb_1"[^>]*>(.*?)</joint>', t, re.S)
+    a = re.search(r"<limit([^/>]*)", m.group(1)).group(1)
+    span = math.degrees(float(re.search(r'upper="([^"]+)"', a).group(1))
+                        - float(re.search(r'lower="([^"]+)"', a).group(1)))
+    assert span > 90.0, f"엄지 대향 가동폭이 {span:.1f}° 뿐이다 — 매뉴얼은 99°"
+
+
+def test_left_hand_is_the_mirror_of_the_right():
+    """★왼손이 오른손 값을 그대로 받으면 조용히 반대로 움직인다.
+
+    사양표는 매뉴얼 §3.3.1 **오른손** 기준이다. 벌림/대향은 좌우 부호가 뒤집히고
+    (l = -hi..-lo) 굴곡은 그대로다. 생성기는 그 관계를 원본 URDF 에서 판정해야 한다.
+    09.09 에 표를 그대로 양손에 적용해 `l_hj_thumb_2` 가 [0,+3.14]→[-2.71,0] 로
+    **부호가 뒤집힌 자산**을 한 번 만들었다 — 이 테스트가 그 회귀를 막는다.
+    """
+    import math
+    import re
+    p = TOOLS_DIR.parent / "generated" / "rl" / "openarm_dg5f-m_bi_rl.urdf"
+    if not p.is_file():
+        pytest.skip(f"자산 미생성: {p}")
+    t = p.read_text(encoding="utf-8")
+    lim = {}
+    for m in re.finditer(r'<joint name="([rl]_hj_[a-z]+_\d)"[^>]*>(.*?)</joint>', t, re.S):
+        a = re.search(r"<limit([^/>]*)", m.group(2)).group(1)
+        lim[m.group(1)] = (float(re.search(r'lower="([^"]+)"', a).group(1)),
+                           float(re.search(r'upper="([^"]+)"', a).group(1)))
+    # 벌림/대향은 미러, 굴곡은 동일 — 어느 쪽이든 **부호가 뒤집히지 않았는지**가 핵심이다.
+    bad = []
+    for name, (llo, lhi) in lim.items():
+        if not name.startswith("l_"):
+            continue
+        rlo, rhi = lim["r_" + name[2:]]
+        same = abs(llo - rlo) < 1e-6 and abs(lhi - rhi) < 1e-6
+        mirror = abs(llo - (-rhi)) < 1e-6 and abs(lhi - (-rlo)) < 1e-6
+        if not (same or mirror):
+            bad.append(f"{name} [{math.degrees(llo):+.0f},{math.degrees(lhi):+.0f}] vs "
+                       f"r [{math.degrees(rlo):+.0f},{math.degrees(rhi):+.0f}]")
+    assert not bad, f"좌우 관계가 동일도 미러도 아니다: {bad}"
+    # `thumb_2` 는 굴곡인데 좌우 부호가 반대인 관절이다 — 왼손 굴곡은 **양수** 방향이어야 한다.
+    assert lim["l_hj_thumb_2"][1] > 1.0, \
+        f"왼손 엄지 굴곡 방향이 뒤집혔다: {lim['l_hj_thumb_2']}"
+    assert lim["r_hj_thumb_2"][0] < -1.0, \
+        f"오른손 엄지 굴곡 방향이 뒤집혔다: {lim['r_hj_thumb_2']}"

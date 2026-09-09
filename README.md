@@ -64,6 +64,7 @@ Wrappers add stable helper frames around vendor end-effector descriptions. They 
 Stable source/generated URDFs used as inputs to the RL canonical generator.
 
 - `openarm_tesollo_bi.urdf` (DG-5F both hands) -> `openarm_dg5f-m_bi`
+- `openarm_tesollo_bi_short.urdf` (DG-5F short base both hands) -> `openarm_dg5f-m-short_bi`
 - `openarm_tesollo_bi_s.urdf` (DG-5F-S both hands) -> `openarm_dg5f-s_bi`
 - `openarm_bi_rh56f1.urdf` (RH56F1 both hands) -> `openarm_rh56f1_bi`
 - `openarm_gripper_bi.urdf` (stock gripper both arms, `tools/gen_gripper_bi_source.sh`) -> `openarm_gripper_bi`
@@ -76,6 +77,7 @@ RL-only canonical outputs (2026-09-05 line-up, one per end-effector, both arms):
 | asset | hands | hand drive | vendor gains ported | fabric variants |
 |---|---|---|---|---|
 | `openarm_dg5f-m_bi_rl` | Tesollo DG-5F x2 (link masses scaled x1.0463 to the measured **1.763 kg** per hand, vendor 1.685) | direct (20/20 per hand) | arm `control_gains.yaml` + `dg5f_driver` PID (p 1.5 / d 0) | `openarm_dg5f-m_bi_right`, `_left` |
+| `openarm_dg5f-m-short_bi_rl` | Tesollo DG-5F x2, **short mount/base** (`*_dg_palm` z 0.0698 -> 0.022, i.e. the palm sits 47.8mm closer to the flange). Vendor CAD masses kept as-is: **1.570 kg** per hand | direct (20/20 per hand) | same as above (identical `lj_/rj_dg_*` joint names) | `openarm_dg5f-m-short_bi_right`, `_left` |
 | `openarm_dg5f-s_bi_rl` | Tesollo DG-5F-S x2 | direct | same as above (same driver stack) | `openarm_dg5f-s_bi_right`, `_left` |
 | `openarm_rh56f1_bi_rl` | Inspire RH56F1 x2 | PhysX mimic (6 driven / 12) | arm only - the vendor stack (`vendor/inspire_ws`, RS-485 registers angleSet / speedSet / forceSet) exposes no PD gains -> hand keeps fallback 100/1 | `openarm_rh56f1_bi` |
 | `openarm_gripper_bi_rl` | stock OpenArm gripper x2 | PhysX mimic (jaw 2 follows jaw 1) | arm + `GRIPPER_KP/KD` 5.0/0.1 (`openarm_real` hardware interface, motor-unit values carried verbatim) | `openarm_gripper_bi_right`, `_left` |
@@ -184,10 +186,12 @@ Expected outputs:
 
 ```text
 generated/rl/openarm_dg5f-m_bi_rl.urdf      + _manifest.yaml   + openarm_dg5f-m_bi_rl/  (USD)
+generated/rl/openarm_dg5f-m-short_bi_rl.urdf + _manifest.yaml  + openarm_dg5f-m-short_bi_rl/
 generated/rl/openarm_dg5f-s_bi_rl.urdf      + _manifest.yaml   + openarm_dg5f-s_bi_rl/
 generated/rl/openarm_rh56f1_bi_rl.urdf      + _manifest.yaml   + openarm_rh56f1_bi_rl/
 generated/rl/openarm_gripper_bi_rl.urdf     + _manifest.yaml   + openarm_gripper_bi_rl/
-generated/fabric/openarm_dg5f-m_bi_{right,left}/ openarm_dg5f-s_bi_{right,left}/
+generated/fabric/openarm_dg5f-m_bi_{right,left}/ openarm_dg5f-m-short_bi_{right,left}/
+                 openarm_dg5f-s_bi_{right,left}/
                  openarm_gripper_bi_{right,left}/ openarm_rh56f1_bi/
 ```
 
@@ -201,6 +205,7 @@ Valid source names:
 
 ```text
 openarm_dg5f-m_bi
+openarm_dg5f-m-short_bi
 openarm_dg5f-s_bi
 openarm_rh56f1_bi
 openarm_gripper_bi
@@ -429,6 +434,7 @@ Use one of:
 
 ```text
 /home/user/rl_ws/hdgp/assets/robot/openarm_dg5f-m_bi_rl/openarm_dg5f-m_bi_rl.usd
+/home/user/rl_ws/hdgp/assets/robot/openarm_dg5f-m-short_bi_rl/openarm_dg5f-m-short_bi_rl.usd
 /home/user/rl_ws/hdgp/assets/robot/openarm_dg5f-s_bi_rl/openarm_dg5f-s_bi_rl.usd
 /home/user/rl_ws/hdgp/assets/robot/openarm_rh56f1_bi_rl/openarm_rh56f1_bi_rl.usd
 /home/user/rl_ws/hdgp/assets/robot/openarm_gripper_bi_rl/openarm_gripper_bi_rl.usd

@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import math
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -799,41 +800,100 @@ def scale_hand_masses(root: ET.Element, target_kg: float) -> dict[str, float]:
 #     ①다른 관절은 **0(편 상태)** 로 두고 하나씩 굽힌다(이웃을 극단에 고정하면 조합을 잰다).
 #     ②같은 손가락 안쪽 **2-hop 쌍**(`_2↔_4`,`_2↔tip`)을 포함한다 — PhysX 자동 필터는
 #       직접 연결된 부모-자식뿐이고, 굴곡 한계를 정하는 건 그 2-hop 쌍이다.
-JOINT_LIMIT_RESTRICTIONS: dict[str, dict[str, tuple[float, float]]] = {
-    # 아직 측정하지 않은 자산 — 벤더 한계를 그대로 쓴다(자기관통 여부 미검증).
-    "openarm_dg5f-m-short_bi": {},
-    "openarm_dg5f-s_bi": {},
-    "openarm_rh56f1_bi": {},
-    "openarm_gripper_bi": {},
+# ══════════════════════════════════════════════════════════════════════════════
+# 손 관절 사양 — 출처는 **벤더 공식 사용자 매뉴얼**이다.
+#   `DG5F_User_Manual_En_v1.1.4` §3.1(전기 사양) · §3.3.1(모터별 가동범위)
+#
+# ★왜 URDF 가 아니라 매뉴얼인가. 벤더가 같은 값을 두 곳에서 **다르게** 준다:
+#     effort    드라이버 URDF 7.5 N·m   vs  매뉴얼 peak(stall) **2.0 N·m**   → 3.75배 과대
+#     velocity  드라이버 URDF 3.142 rad/s vs 매뉴얼 무부하 75 RPM = **7.854** → 2.5배 과소
+#     가동범위  7개 관절이 불일치. 대표적으로 `thumb_1` URDF -22~+51° vs 매뉴얼 -22~+77°.
+#   URDF 의 7.5 와 π 는 placeholder 로 보인다(전 20관절이 같은 값, π 라는 우연). 매뉴얼은
+#   제품 사양서이고 CAD 릴리스와도 일치한다(엄지 상한 CAD 1.3439 rad = 77°). 매뉴얼이 기준이다.
+#
+# ★부호 규약. 매뉴얼은 모터 기준, URDF 는 링크 기준이라 `thumb_2` 만 방향이 반대다
+#   (매뉴얼 0~+155°, URDF 프레임에서는 굴곡이 음수 → -155~0). 나머지 19관절은 같다.
+#
+# ★과신전(`_3/_4` 음수)은 **자산에서 허용**한다 — 실기가 실제로 되기 때문이다. 정책이 그걸
+#   명령하지 못하게 막는 것은 프로필의 `hand_action_limit_override` 몫이다. 물리 한계와
+#   액션 범위는 다른 층이고, 섞으면 "실기에 있는 자유도를 sim 이 모른다"가 된다(09.09 확정).
+#
+# ⚠매뉴얼 정격(연속) 토크는 **0.4 N·m** 이고 2.0 은 스톨(순간)이다. 매뉴얼이 스톨 연속 사용에
+#   "급격한 온도 상승·제품 손상"을 경고하므로, 파지 유지 토크는 0.4 근처를 목표로 감시할 것.
+# ══════════════════════════════════════════════════════════════════════════════
+_D = math.radians
+
+#: 매뉴얼 §3.1 — 전 관절 공통(모터가 20개 모두 같다).
+HAND_PEAK_TORQUE_NM = 2.0        # Peak Torque of Each Joint (Stall torque)
+HAND_RATED_TORQUE_NM = 0.4       # Rated Torque — 연속 사용 목표(자산에는 안 싣는다)
+HAND_NO_LOAD_RAD_S = 75.0 * 2.0 * math.pi / 60.0     # 75 RPM
+
+#: 매뉴얼 §3.3.1 오른손 Motor 1..20 → 관절 접미사. 좌우는 미러라 같은 표를 쓴다.
+_DG5F_M_RANGE_DEG: dict[str, tuple[float, float]] = {
+    "thumb_1": (-22, 77), "thumb_2": (-155, 0), "thumb_3": (-90, 90), "thumb_4": (-90, 90),
+    "index_1": (-31, 20), "index_2": (0, 115), "index_3": (-90, 90), "index_4": (-90, 90),
+    "middle_1": (-30, 30), "middle_2": (0, 115), "middle_3": (-90, 90), "middle_4": (-90, 90),
+    "ring_1": (-15, 32), "ring_2": (0, 110), "ring_3": (-90, 90), "ring_4": (-90, 90),
+    "pinky_1": (0, 60), "pinky_2": (-15, 90), "pinky_3": (-90, 90), "pinky_4": (-90, 90),
+}
+
+#: 자산 → 손 관절 사양. **미등록은 빌드 에러**(벤더 URDF placeholder 를 조용히 쓰지 않게).
+#: 값은 {정규식: (lower_rad, upper_rad)} 이고, effort/velocity 는 전 손관절 공통이다.
+HAND_JOINT_SPEC: dict[str, dict[str, tuple[float, float]] | None] = {
+    # 매뉴얼을 아직 대조하지 않은 자산 — None 이면 벤더 URDF 값을 그대로 둔다(사실을 남긴다).
+    "openarm_dg5f-m-short_bi": None,
+    "openarm_dg5f-s_bi": None,
+    "openarm_rh56f1_bi": None,
+    "openarm_gripper_bi": None,
     "openarm_dg5f-m_bi": {
-        # ① 벌림/대향 `_1` 5개 — 사용자 확정: "무조건 옆 손가락을 침범한다".
-        #    엄지는 실측으로도 하한 −22.9° 가 베이스를 0.67 mm 파고든다. 리셋은 전부 0 이고
-        #    현 과제(컵 grasp-lift)는 벌림을 크게 안 쓴다. ⚠`pinky_1` 은 외전이 아니라
-        #    Z-flex(대향축)라 성격이 다르다 — 같은 폭을 적용했으니 필요하면 여기만 분리할 것.
-        r"[rl]_hj_(thumb|index|middle|ring|pinky)_1": (-0.16, 0.16),
-        # ② 엄지 굴곡 상한 — 다른 관절을 편 채 `_3=_4` 를 훑은 실측:
-        #    0~1.05 rad 은 간극 0.15 mm 유지, **1.20 rad(68.8°)부터 tip↔palm 이 4.95 mm 관통**.
-        #    네 손가락은 1.571 까지 5.2~8.4 mm 간극이 남아 벤더값을 그대로 둔다.
-        r"[rl]_hj_thumb_[34]": (0.0, 1.05),
-        # ③ `_3/_4` 하한 0 — 액션 범위는 이미 override 로 0 이었지만 **물리 한계는 ±1.571**
-        #    이라 접촉이 관절을 음수로 밀 수 있었다(실측 `index_3` −1.16 rad = 66° 뒤로 꺾임).
-        #    정책이 명령할 수 없는 자세를 물리가 만들지 못하게 한다.
-        r"[rl]_hj_(index|middle|ring|pinky)_[34]": (0.0, 1.5708),
+        rf"[rl]_hj_{_suffix}$": (_D(_lo), _D(_hi))
+        for _suffix, (_lo, _hi) in _DG5F_M_RANGE_DEG.items()
     },
 }
 
 
-def restrict_joint_limits(root: ET.Element, asset: str) -> list[str]:
-    """`JOINT_LIMIT_RESTRICTIONS` 로 관절한계를 **좁힌다**(넓히지 않는다)."""
-    if asset not in JOINT_LIMIT_RESTRICTIONS:
+
+def apply_hand_joint_spec(root: ET.Element, asset: str) -> list[str]:
+    """손 관절의 한계·effort·velocity 를 **벤더 매뉴얼 값으로 설정**한다.
+
+    구 `restrict_joint_limits` 를 대체한다. 그쪽은 "좁히기만" 했는데, 매뉴얼 값이 드라이버
+    URDF 보다 **넓은** 관절이 있어(엄지 대향 51°→77°) 좁히기로는 옮길 수 없다.
+    좁히기 전용이던 시절 엄지 대향이 ±9.2° 로 잘려 있었고, 그러면 엄지가 손가락 쪽으로
+    돌아오지 못해 **인벨롭 파지가 원리적으로 불가능**하다(09.09 원인 분석).
+
+    미등록 자산은 빌드 에러다. None 이면 벤더 URDF 값을 그대로 둔다(대조 안 한 사실을 남긴다).
+    """
+    if asset not in HAND_JOINT_SPEC:
         raise RuntimeError(
-            f"{asset}: JOINT_LIMIT_RESTRICTIONS 에 항목이 없다 — 빈 dict 라도 선언할 것.\n"
-            "  벤더 URDF 한계는 자기관통 없는 가동 범위를 보장하지 않는다(09.09 실측).\n"
-            "  아직 안 쟀으면 `{}` 로 등록하고 그 사실을 남긴다.")
-    rules = JOINT_LIMIT_RESTRICTIONS[asset]
-    if not rules:
+            f"{asset}: HAND_JOINT_SPEC 에 항목이 없다 — None 이라도 선언할 것.\n"
+            "  벤더 드라이버 URDF 의 effort 7.5 / velocity π 는 placeholder 로 보이고,\n"
+            "  매뉴얼 §3.1 은 peak 2.0 N·m / 75 RPM 이다. 조용히 URDF 값을 쓰지 않는다.")
+    rules = HAND_JOINT_SPEC[asset]
+    if rules is None:
         return []
-    changed = []
+    # ★좌우 미러. 표는 **오른손 기준**(매뉴얼 §3.3.1 Right hand)이고, 왼손은 관절에 따라
+    #   부호가 뒤집힌다 — 벌림/대향은 미러(l = -hi..-lo), 굴곡은 그대로다.
+    #   어느 쪽인지 **원본 URDF 의 좌우 관계에서 판정**한다. 표에 손으로 적으면 20개를 두 번
+    #   적어야 하고, 한 줄만 틀려도 왼손이 조용히 반대로 움직인다(미러 이식 고전 함정).
+    _orig: dict[str, tuple[float, float]] = {}
+    for _j in root.findall("joint"):
+        _n = _j.get("name") or ""
+        _l = _j.find("limit")
+        if _l is not None and re.fullmatch(r"[rl]_hj_.+", _n):
+            _orig[_n] = (float(_l.get("lower")), float(_l.get("upper")))
+
+    def _is_mirrored(name: str) -> bool:
+        """이 관절이 원본에서 좌우 부호반전 관계였나. 대칭 구간이면 False(그대로 써도 같다)."""
+        if not name.startswith("l_"):
+            return False
+        mate = "r_" + name[2:]
+        if mate not in _orig or name not in _orig:
+            raise RuntimeError(f"{name}: 짝 관절 {mate} 이 없어 미러 여부를 판정할 수 없다")
+        (llo, lhi), (rlo, rhi) = _orig[name], _orig[mate]
+        return abs(llo - (-rhi)) < 1e-6 and abs(lhi - (-rlo)) < 1e-6 and abs(llo + lhi) > 1e-6
+
+    changed: list[str] = []
+    seen: set[str] = set()
     for pattern, (new_lo, new_hi) in rules.items():
         matched = False
         for joint in root.findall("joint"):
@@ -841,21 +901,34 @@ def restrict_joint_limits(root: ET.Element, asset: str) -> list[str]:
             if not re.fullmatch(pattern, name):
                 continue
             matched = True
+            seen.add(name)
             limit = joint.find("limit")
             if limit is None:
-                raise RuntimeError(f"{name}: <limit> 이 없다 — 한계 축소 불가")
+                raise RuntimeError(f"{name}: <limit> 이 없다 — 사양 적용 불가")
             lo, hi = float(limit.get("lower")), float(limit.get("upper"))
-            lo2, hi2 = max(lo, new_lo), min(hi, new_hi)
-            # 리셋(영 자세)이 **닫힌 구간 안**이면 된다. 경계는 정상 —
-            # `_3/_4` 는 하한을 정확히 0 으로 잡는 것이 의도다(손등 과신전 차단).
-            if not (lo2 <= 0.0 <= hi2) or lo2 >= hi2:
+            eff, vel = limit.get("effort"), limit.get("velocity")
+            set_lo, set_hi = (-new_hi, -new_lo) if _is_mirrored(name) else (new_lo, new_hi)
+            # 리셋(영 자세)이 닫힌 구간 안이어야 한다. 경계는 정상이다.
+            if not (set_lo <= 0.0 <= set_hi) or set_lo >= set_hi:
                 raise RuntimeError(
-                    f"{name}: 축소 범위 [{lo2}, {hi2}] 가 영 자세(리셋)를 품지 않거나 폭이 0 이다")
-            limit.set("lower", f"{lo2:g}")
-            limit.set("upper", f"{hi2:g}")
-            changed.append(f"{name} [{lo:.4f},{hi:.4f}]→[{lo2:.4f},{hi2:.4f}]")
+                    f"{name}: 매뉴얼 범위 [{set_lo}, {set_hi}] 가 영 자세를 안 품거나 폭이 0 이다")
+            limit.set("lower", f"{set_lo:g}")
+            limit.set("upper", f"{set_hi:g}")
+            limit.set("effort", f"{HAND_PEAK_TORQUE_NM:g}")
+            limit.set("velocity", f"{HAND_NO_LOAD_RAD_S:.3f}")
+            changed.append(
+                f"{name} [{lo:.4f},{hi:.4f}]→[{set_lo:.4f},{set_hi:.4f}] "
+                f"eff {eff}→{HAND_PEAK_TORQUE_NM:g} vel {vel}→{HAND_NO_LOAD_RAD_S:.3f}")
         if not matched:
-            raise RuntimeError(f"관절한계 축소 규칙 '{pattern}' 이 아무 관절도 못 잡았다")
+            raise RuntimeError(f"손 관절 사양 규칙 '{pattern}' 이 아무 관절도 못 잡았다")
+    # 손 관절인데 표에 없는 것이 있으면 조용히 placeholder 로 남는다 — 시끄럽게 죽인다.
+    missed = [j.get("name") for j in root.findall("joint")
+              if re.fullmatch(r"[rl]_hj_.+", j.get("name") or "")
+              and (j.find("limit") is not None) and j.get("name") not in seen]
+    if missed:
+        raise RuntimeError(
+            f"{asset}: 손 관절 {missed} 가 HAND_JOINT_SPEC 에 안 걸렸다 — "
+            "벤더 URDF placeholder 가 그대로 실린다")
     return changed
 
 
@@ -1277,7 +1350,7 @@ def generate_one(name: str, source_path: Path) -> tuple[Path, Path]:
               f"(x{factors['r']:.4f} / x{factors['l']:.4f})")
     head_link_map, head_joint_map = attach_head(root)
     link_map, joint_map = merge_maps((link_map, joint_map), (head_link_map, head_joint_map))
-    for _line in restrict_joint_limits(root, name):
+    for _line in apply_hand_joint_spec(root, name):
         print(f"[{name}] 관절한계 축소 {_line}")
     drop_addressing_frames(root)      # ★토큰 질량 부여 **전에** — 없앨 링크에 질량을 줄 이유가 없다
     give_massless_frames_token_mass(root)

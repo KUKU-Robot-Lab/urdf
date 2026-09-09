@@ -59,140 +59,140 @@
     <parent link="palm_link" />
     <child link="tesollo_right_rl_dg_1_1" />
     <axis xyz="1 0 0" />
-    <limit lower="-0.16" upper="0.16" effort="7.5" velocity="3.1415927" />
+    <limit lower="-0.383972" upper="1.3439" effort="7.5" velocity="3.1415927" />
   </joint>
   <joint name="rj_dg_1_2" type="revolute">
     <origin xyz="0.04195 0 0" rpy="0 0 0" />
     <parent link="tesollo_right_rl_dg_1_1" />
     <child link="tesollo_right_rl_dg_1_2" />
     <axis xyz="0 0 1" />
-    <limit lower="-3.14159265" upper="0" effort="7.5" velocity="3.1415927" />
+    <limit lower="-2.70526" upper="0" effort="7.5" velocity="3.1415927" />
   </joint>
   <joint name="rj_dg_1_3" type="revolute">
     <origin xyz="0 0.031 0" rpy="0 0 0" />
     <parent link="tesollo_right_rl_dg_1_2" />
     <child link="tesollo_right_rl_dg_1_3" />
     <axis xyz="1 0 0" />
-    <limit lower="0" upper="1.05" effort="7.5" velocity="3.1415927" />
+    <limit lower="-1.5708" upper="1.5708" effort="7.5" velocity="3.1415927" />
   </joint>
   <joint name="rj_dg_1_4" type="revolute">
     <origin xyz="0 0.0388 0" rpy="0 0 0" />
     <parent link="tesollo_right_rl_dg_1_3" />
     <child link="tesollo_right_rl_dg_1_4" />
     <axis xyz="1 0 0" />
-    <limit lower="0" upper="1.05" effort="7.5" velocity="3.1415927" />
+    <limit lower="-1.5708" upper="1.5708" effort="7.5" velocity="3.1415927" />
   </joint>
   <joint name="rj_dg_2_1" type="revolute">
     <origin xyz="-0.0071 0.027 0.0661" rpy="0 0 0" />
     <parent link="palm_link" />
     <child link="tesollo_right_rl_dg_2_1" />
     <axis xyz="1 0 0" />
-    <limit lower="-0.16" upper="0.16" effort="7.5" velocity="3.1415927" />
+    <limit lower="-0.541052" upper="0.349066" effort="7.5" velocity="3.1415927" />
   </joint>
   <joint name="rj_dg_2_2" type="revolute">
     <origin xyz="0.01765 0 0.0265" rpy="0 0 0" />
     <parent link="tesollo_right_rl_dg_2_1" />
     <child link="tesollo_right_rl_dg_2_2" />
     <axis xyz="0 1 0" />
-    <limit lower="-0" upper="2.00712864" effort="7.5" velocity="3.1415927" />
+    <limit lower="0" upper="2.00713" effort="7.5" velocity="3.1415927" />
   </joint>
   <joint name="rj_dg_2_3" type="revolute">
     <origin xyz="0 0 0.0388" rpy="0 0 0" />
     <parent link="tesollo_right_rl_dg_2_2" />
     <child link="tesollo_right_rl_dg_2_3" />
     <axis xyz="0 1 0" />
-    <limit lower="0" upper="1.5708" effort="7.5" velocity="3.1415927" />
+    <limit lower="-1.5708" upper="1.5708" effort="7.5" velocity="3.1415927" />
   </joint>
   <joint name="rj_dg_2_4" type="revolute">
     <origin xyz="0 0 0.0388" rpy="0 0 0" />
     <parent link="tesollo_right_rl_dg_2_3" />
     <child link="tesollo_right_rl_dg_2_4" />
     <axis xyz="0 1 0" />
-    <limit lower="0" upper="1.5708" effort="7.5" velocity="3.1415927" />
+    <limit lower="-1.5708" upper="1.5708" effort="7.5" velocity="3.1415927" />
   </joint>
   <joint name="rj_dg_3_1" type="revolute">
     <origin xyz="-0.0071 0.0025 0.0701" rpy="0 0 0" />
     <parent link="palm_link" />
     <child link="tesollo_right_rl_dg_3_1" />
     <axis xyz="1 0 0" />
-    <limit lower="-0.16" upper="0.16" effort="7.5" velocity="3.1415927" />
+    <limit lower="-0.523599" upper="0.523599" effort="7.5" velocity="3.1415927" />
   </joint>
   <joint name="rj_dg_3_2" type="revolute">
     <origin xyz="0.01765 0 0.0265" rpy="0 0 0" />
     <parent link="tesollo_right_rl_dg_3_1" />
     <child link="tesollo_right_rl_dg_3_2" />
     <axis xyz="0 1 0" />
-    <limit lower="-0" upper="1.95476876" effort="7.5" velocity="3.1415927" />
+    <limit lower="0" upper="2.00713" effort="7.5" velocity="3.1415927" />
   </joint>
   <joint name="rj_dg_3_3" type="revolute">
     <origin xyz="0 0 0.0388" rpy="0 0 0" />
     <parent link="tesollo_right_rl_dg_3_2" />
     <child link="tesollo_right_rl_dg_3_3" />
     <axis xyz="0 1 0" />
-    <limit lower="0" upper="1.5708" effort="7.5" velocity="3.1415927" />
+    <limit lower="-1.5708" upper="1.5708" effort="7.5" velocity="3.1415927" />
   </joint>
   <joint name="rj_dg_3_4" type="revolute">
     <origin xyz="0 0 0.0388" rpy="0 0 0" />
     <parent link="tesollo_right_rl_dg_3_3" />
     <child link="tesollo_right_rl_dg_3_4" />
     <axis xyz="0 1 0" />
-    <limit lower="0" upper="1.5708" effort="7.5" velocity="3.1415927" />
+    <limit lower="-1.5708" upper="1.5708" effort="7.5" velocity="3.1415927" />
   </joint>
   <joint name="rj_dg_4_1" type="revolute">
     <origin xyz="-0.0071 -0.022 0.0621" rpy="0 0 0" />
     <parent link="palm_link" />
     <child link="tesollo_right_rl_dg_4_1" />
     <axis xyz="1 0 0" />
-    <limit lower="-0.16" upper="0.16" effort="7.5" velocity="3.1415927" />
+    <limit lower="-0.261799" upper="0.558505" effort="7.5" velocity="3.1415927" />
   </joint>
   <joint name="rj_dg_4_2" type="revolute">
     <origin xyz="0.01765 0 0.0265" rpy="0 0 0" />
     <parent link="tesollo_right_rl_dg_4_1" />
     <child link="tesollo_right_rl_dg_4_2" />
     <axis xyz="0 1 0" />
-    <limit lower="-0" upper="1.90240888" effort="7.5" velocity="3.1415927" />
+    <limit lower="0" upper="1.91986" effort="7.5" velocity="3.1415927" />
   </joint>
   <joint name="rj_dg_4_3" type="revolute">
     <origin xyz="0 0 0.0388" rpy="0 0 0" />
     <parent link="tesollo_right_rl_dg_4_2" />
     <child link="tesollo_right_rl_dg_4_3" />
     <axis xyz="0 1 0" />
-    <limit lower="0" upper="1.5708" effort="7.5" velocity="3.1415927" />
+    <limit lower="-1.5708" upper="1.5708" effort="7.5" velocity="3.1415927" />
   </joint>
   <joint name="rj_dg_4_4" type="revolute">
     <origin xyz="0 0 0.0388" rpy="0 0 0" />
     <parent link="tesollo_right_rl_dg_4_3" />
     <child link="tesollo_right_rl_dg_4_4" />
     <axis xyz="0 1 0" />
-    <limit lower="0" upper="1.5708" effort="7.5" velocity="3.1415927" />
+    <limit lower="-1.5708" upper="1.5708" effort="7.5" velocity="3.1415927" />
   </joint>
   <joint name="rj_dg_5_1" type="revolute">
     <origin xyz="0.0103 -0.0195 0.0182" rpy="0 0 0" />
     <parent link="palm_link" />
     <child link="tesollo_right_rl_dg_5_1" />
     <axis xyz="0 0 1" />
-    <limit lower="-0.0174533" upper="0.16" effort="7.5" velocity="3.1415927" />
+    <limit lower="0" upper="1.0472" effort="7.5" velocity="3.1415927" />
   </joint>
   <joint name="rj_dg_5_2" type="revolute">
     <origin xyz="0 -0.028 0.0381" rpy="0 0 0" />
     <parent link="tesollo_right_rl_dg_5_1" />
     <child link="tesollo_right_rl_dg_5_2" />
     <axis xyz="1 0 0" />
-    <limit lower="-0.41887902" upper="0.610865238" effort="7.5" velocity="3.1415927" />
+    <limit lower="-0.261799" upper="1.5708" effort="7.5" velocity="3.1415927" />
   </joint>
   <joint name="rj_dg_5_3" type="revolute">
     <origin xyz="0 0 0.031" rpy="0 0 0" />
     <parent link="tesollo_right_rl_dg_5_2" />
     <child link="tesollo_right_rl_dg_5_3" />
     <axis xyz="0 1 0" />
-    <limit lower="0" upper="1.5708" effort="7.5" velocity="3.1415927" />
+    <limit lower="-1.5708" upper="1.5708" effort="7.5" velocity="3.1415927" />
   </joint>
   <joint name="rj_dg_5_4" type="revolute">
     <origin xyz="0 0 0.0388" rpy="0 0 0" />
     <parent link="tesollo_right_rl_dg_5_3" />
     <child link="tesollo_right_rl_dg_5_4" />
     <axis xyz="0 1 0" />
-    <limit lower="0" upper="1.5708" effort="7.5" velocity="3.1415927" />
+    <limit lower="-1.5708" upper="1.5708" effort="7.5" velocity="3.1415927" />
   </joint>
   <joint name="root_joint" type="fixed">
     <origin xyz="0. 0. 0." rpy="0. 0. 0." />
