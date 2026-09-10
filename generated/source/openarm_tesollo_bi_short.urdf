@@ -1179,9 +1179,9 @@
   </joint>
   <link name="left_dg5f_short_adaptor">
     <inertial>
-      <origin rpy="0 0 0" xyz="0 0 0.004986"/>
-      <mass value="0.06912"/>
-      <inertia ixx="1.900e-05" ixy="0.0" ixz="0.0" iyy="1.900e-05" iyz="0.0" izz="3.686e-05"/>
+      <origin rpy="0 0 0" xyz="0 0 0.004979"/>
+      <mass value="0.031642"/>
+      <inertia ixx="8.695287e-06" ixy="0.0" ixz="0.0" iyy="8.695495e-06" iyz="0.0" izz="1.68636e-05"/>
     </inertial>
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
@@ -1880,9 +1880,9 @@
   </joint>
   <link name="right_dg5f_short_adaptor">
     <inertial>
-      <origin rpy="0 0 0" xyz="0 0 0.004986"/>
-      <mass value="0.06912"/>
-      <inertia ixx="1.900e-05" ixy="0.0" ixz="0.0" iyy="1.900e-05" iyz="0.0" izz="3.686e-05"/>
+      <origin rpy="0 0 0" xyz="0 0 0.004979"/>
+      <mass value="0.031642"/>
+      <inertia ixx="8.695287e-06" ixy="0.0" ixz="0.0" iyy="8.695495e-06" iyz="0.0" izz="1.68636e-05"/>
     </inertial>
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>

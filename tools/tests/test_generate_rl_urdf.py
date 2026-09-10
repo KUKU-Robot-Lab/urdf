@@ -130,10 +130,10 @@ def test_every_link_has_inertial(name: str) -> None:
         assert mass >= gen.TOKEN_MASS_KG
 
 
-#: 우리가 추가한 링크 — **벤더 손 질량이 아니다**. 벤더 드리프트 검사에서 제외한다.
-#:   `*_hl_flange_adapter` (09.10): dg5f-m-short <-> OpenArm 플랜지 어댑터 판.
-#:   벤더가 재질·질량을 안 줘서 메시 부피 x 알루미늄으로 추정한 값이라(0.06912 kg)
-#:   벤더 합계에 섞이면 드리프트 검사가 의미를 잃는다.
+#: 우리가 추가한 링크 — **벤더 손 질량 합에 섞지 않는다**(손이 아니라 팔↔손 어댑터다).
+#:   `*_hl_flange_adapter` (09.10): dg5f-m-short <-> OpenArm 플랜지 어댑터 판, 0.031642 kg.
+#:   질량 자체는 벤더값이지만(vendor/dg5f_m_short_adaptor/usd) 벤더가 고시한 **손** 질량
+#:   (1.5700 kg)에는 안 들어가므로, 합계에 섞으면 드리프트 검사가 깨진다.
 NON_VENDOR_HAND_LINKS = ("_hl_flange_adapter",)
 
 
@@ -584,12 +584,13 @@ def test_hand_spec_tables_match_the_vendor_isaac_usd():
 
 
 def test_short_flange_adapter_is_present_and_declared_non_vendor() -> None:
-    """dg5f-m-short 만 플랜지 어댑터 판을 갖는다 — 질량은 **추정값**이므로 명시한다.
+    """dg5f-m-short 만 플랜지 어댑터 판을 갖고, 질량·관성은 **벤더값**이어야 한다.
 
-    벤더가 재질·질량을 주지 않아 메시 부피(25.600 cm^3)에 알루미늄 6061(2700 kg/m^3)을
-    곱해 0.06912 kg 으로 넣었다. 물리 링크는 질량이 없으면 PhysX 에서 1kg 유령이 되므로
-    (docs/ROBOT_ASSET_SPEC.md §0 의 명시적 예외) 넣지 않을 수 없다.
-    벤더가 실제 값을 주면 여기서 깨져야 한다.
+    출처: `vendor/dg5f_m_short_adaptor/usd/dg5f_m_short_adaptor.usda` (Tesollo, Fusion 덤프)
+        physics:mass 0.031642 kg (PLA 1.24 g/cm^3) · centerOfMass (0,0,0.004979)
+        diagonalInertia (8.695287e-06, 8.695495e-06, 1.68636e-05)
+    ★09.10 첫 판은 재질을 몰라 알루미늄으로 0.06912 kg 을 추정해 넣었다 — 2.18배 과대였다.
+      이 테스트가 그 종류의 추정 복귀를 막는다.
     """
     for name in ("openarm_dg5f-m_bi", "openarm_dg5f-s_bi"):
         links = {l.attrib["name"] for l in load_urdf(name).findall("link")}
@@ -600,7 +601,12 @@ def test_short_flange_adapter_is_present_and_declared_non_vendor() -> None:
         link = [l for l in root.findall("link") if l.attrib["name"] == f"{side}_hl_flange_adapter"]
         assert link, f"{side}_hl_flange_adapter 가 없다"
         m = float(link[0].find("inertial/mass").attrib["value"])
-        assert m == pytest.approx(0.06912, abs=1e-5), m
+        assert m == pytest.approx(0.031642, abs=1e-6), m
+        ine = link[0].find("inertial/inertia")
+        assert float(ine.get("ixx")) == pytest.approx(8.695287e-06, rel=1e-6)
+        assert float(ine.get("izz")) == pytest.approx(1.68636e-05, rel=1e-6)
+        com = [float(v) for v in link[0].find("inertial/origin").get("xyz").split()]
+        assert com == pytest.approx([0.0, 0.0, 0.004979], abs=1e-9)
     # 판 두께 10mm 가 마운트 체인에 정확히 더해져야 한다.
     joints = joints_by_name(root)
     for side in ("r", "l"):

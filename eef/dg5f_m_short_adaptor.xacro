@@ -9,27 +9,31 @@
         메시 단위는 **mm** 이므로 scale 0.001 이 필수다.
         결합면: z=0 이 팔 플랜지 쪽, z=10 이 손 마운트 쪽.
 
-  ⚠질량은 **벤더값이 아니다.** 벤더가 재질/질량을 주지 않아 메시 부피(25.600 cm^3,
-    바운딩박스 충전율 84.6%)에 알루미늄 6061(2700 kg/m^3)을 곱해 추정했다 -> 0.06912 kg.
-    관성도 같은 메시로 적분한 값이다(대각, 질량중심 z 4.986mm).
-    벤더가 실제 재질·질량을 주면 그 값으로 교체할 것. 근거: docs/ROBOT_ASSET_SPEC.md §0
-    ("벤더가 안 주는 양은 안 넣는다"의 예외 — 물리 링크는 질량이 없으면 PhysX 에서
-     1kg 유령이 되므로 넣지 않을 수 없다).
+  질량/관성은 **벤더값**이다 — vendor/dg5f_m_short_adaptor/usd/dg5f_m_short_adaptor.usda
+    (Tesollo 가 Fusion 에서 덤프: "Meters, Z-up. Origin = bottom mounting face centre.
+     Threads removed; same mesh as the STL/DAE."):
+        physics:mass           0.031642 kg   (PLA 1.24 g/cm^3, 나사산 포함 실형상 기준)
+        physics:centerOfMass   (0, 0, 0.004979)
+        physics:diagonalInertia (8.695287e-06, 8.695495e-06, 1.68636e-05)  principalAxes 단위
+        physics:approximation  convexHull    (우리 자산 기본값과 일치)
+    ★09.10 첫 판에서 재질을 몰라 알루미늄 6061 로 추정해 0.06912 kg 을 넣었다 — **2.18배
+      과대**였다. 벤더 USD 를 확인하니 PLA 였다. 우리 메시 적분값을 PLA 밀도로 환산하면
+      벤더 관성과 소수 4자리까지 일치하므로 형상 해석 자체는 맞았고 밀도만 틀렸다.
 -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="dg5f_m_short_adaptor">
 
   <xacro:property name="dg5f_short_adaptor_thickness" value="0.010"/>
-  <xacro:property name="dg5f_short_adaptor_mass" value="0.06912"/>
+  <xacro:property name="dg5f_short_adaptor_mass" value="0.031642"/>
   <xacro:property name="dg5f_short_adaptor_dir"
                  value="/home/user/rl_ws/urdf/vendor/dg5f_m_short_adaptor/meshes"/>
 
   <xacro:macro name="dg5f_m_short_adaptor" params="prefix:=''">
     <link name="${prefix}dg5f_short_adaptor">
       <inertial>
-        <origin xyz="0 0 0.004986" rpy="0 0 0"/>
+        <origin xyz="0 0 0.004979" rpy="0 0 0"/>
         <mass value="${dg5f_short_adaptor_mass}"/>
-        <inertia ixx="1.900e-05" ixy="0.0" ixz="0.0"
-                 iyy="1.900e-05" iyz="0.0" izz="3.686e-05"/>
+        <inertia ixx="8.695287e-06" ixy="0.0" ixz="0.0"
+                 iyy="8.695495e-06" iyz="0.0" izz="1.68636e-05"/>
       </inertial>
       <visual>
         <origin xyz="0 0 0" rpy="0 0 0"/>
