@@ -379,7 +379,8 @@ def test_hand_spec_table_is_declared_per_asset():
 
 
 def test_manual_effort_and_velocity_land_in_generated_urdf():
-    """생성 URDF 의 손 20관절 effort=2.0 · velocity=7.854 (매뉴얼 §3.1)."""
+    """생성 URDF 의 손 20관절 effort=7.5 · velocity=pi (벤더 Isaac USD, 09.10 전환)."""
+    import math
     import re
     p = TOOLS_DIR.parent / "generated" / "rl" / "openarm_dg5f-m_bi_rl.urdf"
     if not p.is_file():
@@ -393,16 +394,16 @@ def test_manual_effort_and_velocity_land_in_generated_urdf():
             continue
         eff = float(re.search(r'effort="([^"]+)"', a.group(1)).group(1))
         vel = float(re.search(r'velocity="([^"]+)"', a.group(1)).group(1))
-        if abs(eff - 2.0) > 1e-6 or abs(vel - 7.854) > 1e-3:
+        if abs(eff - 7.5) > 1e-6 or abs(vel - math.pi) > 1e-3:
             bad.append(f"{m.group(1)} eff={eff} vel={vel}")
-    assert not bad, f"매뉴얼 effort/velocity 가 안 실렸다: {bad[:5]}"
+    assert not bad, f"벤더 USD effort/velocity 가 안 실렸다: {bad[:5]}"
 
 
 def test_manual_joint_ranges_land_in_generated_urdf():
-    """매뉴얼 §3.3.1 가동범위가 그대로 실려야 한다.
+    """**벤더 Isaac USD** `dg5f_right` 가동범위가 그대로 실려야 한다(09.10 전환).
 
-    ★`thumb_2` 만 부호가 반대다 — 매뉴얼 0~+155°, 우리 URDF 프레임은 굴곡이 음수라
-      -155~0 으로 옮긴다. 나머지 19관절은 부호 규약이 같다.
+    ★`thumb_2` 만 부호가 반대다 — 벤더 우손 USD 는 -155~0, 좌손은 0~+155 다.
+      좌우 부호 규약이 다른 관절이 있으므로 표에서 추론하지 말 것(docs §2-1b).
     ★과신전(`_3/_4` 음수)은 **자산에서 허용**한다. 실기가 실제로 되기 때문이다.
       정책이 그걸 명령하지 못하게 막는 것은 프로필의 `hand_action_limit_override` 몫이고,
       물리 한계와 액션 범위는 서로 다른 층이다(09.09 사용자 확정).
@@ -416,7 +417,7 @@ def test_manual_joint_ranges_land_in_generated_urdf():
     expect_deg = {
         "thumb_1": (-22, 77), "thumb_2": (-155, 0), "thumb_3": (-90, 90), "thumb_4": (-90, 90),
         "index_1": (-31, 20), "index_2": (0, 115), "index_3": (-90, 90), "index_4": (-90, 90),
-        "middle_1": (-30, 30), "middle_2": (0, 115), "middle_3": (-90, 90), "middle_4": (-90, 90),
+        "middle_1": (-25, 25), "middle_2": (0, 115), "middle_3": (-90, 90), "middle_4": (-90, 90),
         "ring_1": (-15, 32), "ring_2": (0, 110), "ring_3": (-90, 90), "ring_4": (-90, 90),
         "pinky_1": (0, 60), "pinky_2": (-15, 90), "pinky_3": (-90, 90), "pinky_4": (-90, 90),
     }
@@ -491,3 +492,56 @@ def test_left_hand_is_the_mirror_of_the_right():
         f"왼손 엄지 굴곡 방향이 뒤집혔다: {lim['l_hj_thumb_2']}"
     assert lim["r_hj_thumb_2"][0] < -1.0, \
         f"오른손 엄지 굴곡 방향이 뒤집혔다: {lim['r_hj_thumb_2']}"
+
+
+def test_hand_spec_tables_match_the_vendor_isaac_usd():
+    """`_DG5F_M_RANGE_DEG` / `_DG5F_S_RANGE_DEG` 가 **벤더 Isaac USD 와 일치**한다.
+
+    표를 손으로 베낀 값이 아니라는 유일한 보증이다. 벤더가 자산을 갱신하면 여기서 깨진다.
+    출처: `repo/tesollo/tesollo_model/dg5f*/usd/*_right/configuration/*_physics.usd` (docs §0).
+    """
+    import math
+    import re as _re
+
+    import pytest
+    Usd = pytest.importorskip("pxr.Usd", reason="USD 미설치 — 벤더 대조 생략")
+
+    vendor_root = TOOLS_DIR.parents[1] / "repo" / "tesollo" / "tesollo_model"
+    if not vendor_root.is_dir():
+        pytest.skip(f"벤더 레포 없음: {vendor_root}")
+
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("_gen", TOOLS_DIR / "generate_rl_urdf.py")
+    gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen)
+
+    pat = _re.compile(r"^(?:rj_dg|joint)_([1-5])_([1-4])$")
+    fingers = {"1": "thumb", "2": "index", "3": "middle", "4": "ring", "5": "pinky"}
+    cases = [("dg5f/usd/dg5f_right/configuration/dg5f_right_physics.usd", gen._DG5F_M_RANGE_DEG),
+             ("dg5fs/usd/dg5fs_right/configuration/dg5fs_right_physics.usd", gen._DG5F_S_RANGE_DEG)]
+    for rel, table in cases:
+        usd = vendor_root / rel
+        if not usd.is_file():
+            pytest.skip(f"벤더 자산 없음: {usd}")
+        stage = Usd.Stage.Open(str(usd))
+        seen, bad = set(), []
+        max_force, max_vel = set(), set()
+        for prim in stage.Traverse():
+            m = pat.match(prim.GetName())
+            if not m or prim.GetName() in seen:
+                continue
+            g = lambda k: (prim.GetAttribute(k).Get() if prim.GetAttribute(k) else None)
+            if g("drive:angular:physics:stiffness") is None:
+                continue
+            seen.add(prim.GetName())
+            key = f"{fingers[m.group(1)]}_{m.group(2)}"
+            want = table[key]
+            got = (g("physics:lowerLimit"), g("physics:upperLimit"))
+            if abs(got[0] - want[0]) > 0.05 or abs(got[1] - want[1]) > 0.05:
+                bad.append(f"{key}: 표 {want} vs USD ({got[0]:.2f}, {got[1]:.2f})")
+            max_force.add(round(g("drive:angular:physics:maxForce"), 3))
+            max_vel.add(round(g("physxJoint:maxJointVelocity"), 1))
+        assert len(seen) == 20, f"{rel}: 관절 20개가 아니라 {len(seen)}개"
+        assert not bad, f"{rel} 표가 벤더 USD 와 다르다: {bad}"
+        assert max_force == {gen.HAND_PEAK_TORQUE_NM}, f"{rel}: maxForce {max_force}"
+        assert max_vel == {round(math.degrees(gen.HAND_NO_LOAD_RAD_S), 1)}, f"{rel}: maxJointVelocity {max_vel}"
