@@ -153,7 +153,11 @@ def test_dg5f_hand_mass_matches_measurement() -> None:
 @pytest.mark.parametrize("name", [n for n in RL_NAMES if n not in gen.HAND_MASS_TARGET_KG])
 def test_other_hands_keep_vendor_mass(name: str) -> None:
     root = load_urdf(name)
-    vendor = {"openarm_dg5f-m-short_bi": 1.5700, "openarm_dg5f-s_bi": 1.2084,
+    # ★09.10 `-tl` 은 short 와 **같은 손**이고 thumb_1 만 fixed 로 용접했다. 용접은
+    #   링크·질량을 옮기지 않으므로 손 질량이 같아야 한다(실측 1.5700 kg 로 확인).
+    #   여기 값이 갈리면 용접이 링크를 병합했다는 뜻이라 실패해야 맞다.
+    vendor = {"openarm_dg5f-m-short_bi": 1.5700, "openarm_dg5f-m-short-tl_bi": 1.5700,
+              "openarm_dg5f-s_bi": 1.2084,
               "openarm_rh56f1_bi": 0.7077, "openarm_gripper_bi": 0.4222}
     for side in ("r", "l"):
         assert hand_mass_kg(root, side) == pytest.approx(vendor[name], abs=2e-3)

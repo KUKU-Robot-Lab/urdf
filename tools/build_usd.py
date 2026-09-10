@@ -278,6 +278,11 @@ ASSET_BUILDS: dict[str, AssetBuild] = {
     # dg5f_ros2's config is byte-identical to the delto_m_ros2 copy read here).
     "openarm_dg5f-m-short_bi_rl": AssetBuild(
         hand_drive="direct", gain_sources=(ARM_DRIVER_GAINS, DG5F_DRIVER_GAINS)),
+    # ★09.10 thumb-lock: the same short hand with `*_hj_thumb_1` welded to a fixed
+    #   joint, so PhysX has no DOF for contact to push past the limit. The drive
+    #   stack is unchanged (same dg5f_driver PID, same joint names minus thumb_1).
+    "openarm_dg5f-m-short-tl_bi_rl": AssetBuild(
+        hand_drive="direct", gain_sources=(ARM_DRIVER_GAINS, DG5F_DRIVER_GAINS)),
     # DG-5F-S shares the dg5f_driver stack (same lj_/rj_dg_* joint names).
     "openarm_dg5f-s_bi_rl": AssetBuild(
         hand_drive="direct", gain_sources=(ARM_DRIVER_GAINS, DG5F_DRIVER_GAINS)),

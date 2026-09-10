@@ -210,6 +210,10 @@ SOURCES = OrderedDict(
     [
         ("openarm_dg5f-m_bi", ROOT / "generated" / "source" / "openarm_tesollo_bi.urdf"),
         ("openarm_dg5f-m-short_bi", ROOT / "generated" / "source" / "openarm_tesollo_bi_short.urdf"),
+        # ★09.10 thumb-lock 변종 — short 와 **같은 소스**를 쓰고 thumb_1 만 fixed 로 만든다.
+        #   왜 별 자산인가: `openarm_dg5f-m-short_bi_rl` 은 트랙 A(grasp_kp/grasp_s2r)도
+        #   쓰므로 여기를 고치면 A 의 액션·관측 차원이 같이 바뀐다.
+        ("openarm_dg5f-m-short-tl_bi", ROOT / "generated" / "source" / "openarm_tesollo_bi_short.urdf"),
         ("openarm_dg5f-s_bi", ROOT / "generated" / "source" / "openarm_tesollo_bi_s.urdf"),
         ("openarm_rh56f1_bi", ROOT / "generated" / "source" / "openarm_bi_rh56f1.urdf"),
         ("openarm_gripper_bi", ROOT / "generated" / "source" / "openarm_gripper_bi.urdf"),
@@ -899,8 +903,55 @@ HAND_JOINT_SPEC: dict[str, dict[str, tuple[float, float]] | None] = {
     "openarm_gripper_bi": None,       # 스톡 2지 그리퍼 — 손이 아니다
     "openarm_dg5f-m_bi": _spec_from_deg(_DG5F_M_RANGE_DEG),
     "openarm_dg5f-m-short_bi": _spec_from_deg(_DG5F_M_RANGE_DEG),
+    "openarm_dg5f-m-short-tl_bi": _spec_from_deg(_DG5F_M_RANGE_DEG),
     "openarm_dg5f-s_bi": _spec_from_deg(_DG5F_S_RANGE_DEG),
 }
+
+
+#: 자산별로 **fixed 로 용접할** 손 관절 정규식. 미등록 자산은 잠그지 않는다.
+#:
+#: ★09.10 왜 필요한가. `thumb_1` 은 액션 한계를 ±0.01 rad 로 묶어도 **접촉이 밀어낸다** —
+#:   학습 실측에서 한계 밖 체류 시간이 38~57% 이고 최대 이탈이 −4.075 rad(한계 −0.384)였다.
+#:   위치 드라이브가 그 자세를 되돌리려면 kp 49.7 × 4.075 ≈ 202 N·m 가 필요한데 벤더
+#:   effort 상한은 7.5 N·m 라 **27배 포화**다. 즉 어떤 게인·솔버로도 못 잡는다
+#:   (실측 A/B: 솔버 8/0↔32/1 이탈 0.383↔0.380, 벤더 게인 33배 상향도 효과 미검출).
+#:   실기 DG-5F 엄지에는 **기계식 하드스톱**이 있어 −4 rad 로 도는 일이 물리적으로 불가능하다.
+#:   따라서 지금 sim 이 실기보다 틀린 쪽이고, DOF 를 없애는 것이 실기에 더 가깝다.
+#: ★사용자 부호 규약(09.09)도 "1번 조인트 0으로 유지되어야 함"이고, FK 실측에서 thumb_1 = 0
+#:   이 대향 최적이다(0 에서 엄지↔검지 23.6mm vs +1.344 에서 77.6mm). 잠가서 잃는 것이 없다.
+HAND_LOCKED_JOINTS: dict[str, tuple[str, ...]] = {
+    "openarm_dg5f-m-short-tl_bi": (r"[rl]_hj_thumb_1",),
+}
+
+
+def lock_hand_joints(root: ET.Element, asset: str) -> list[str]:
+    """`HAND_LOCKED_JOINTS` 의 관절을 **fixed 로 용접**한다(자유도 자체를 없앤다).
+
+    한계를 좁히는 것과 다르다 — 한계는 솔버가 지켜야 하는 제약이라 접촉 임펄스가 크면
+    뚫린다. fixed 는 자유도가 없어 뚫을 대상이 없다.
+
+    `<limit>`·`<axis>`·`<dynamics>`·`<mimic>` 을 지운다. URDF 규약상 fixed 관절에는
+    이 태그들이 의미가 없고, 남겨두면 임포터가 드라이브를 만들려다 조용히 어긋난다.
+    """
+    pats = HAND_LOCKED_JOINTS.get(asset)
+    if not pats:
+        return []
+    done: list[str] = []
+    for joint in root.findall("joint"):
+        name = joint.get("name") or ""
+        if not any(re.fullmatch(p, name) for p in pats):
+            continue
+        if joint.get("type") == "fixed":
+            continue
+        joint.set("type", "fixed")
+        for tag in ("limit", "axis", "dynamics", "mimic", "safety_controller"):
+            for el in joint.findall(tag):
+                joint.remove(el)
+        done.append(name)
+    if len(done) != len(pats) * 2:      # 좌우 한 쌍씩
+        raise RuntimeError(
+            f"{asset}: 잠금 대상 {pats} 가 좌우 {len(pats) * 2}개여야 하는데 {done} 를 찾았다")
+    return done
 
 
 def apply_hand_joint_spec(root: ET.Element, asset: str) -> list[str]:
@@ -1402,6 +1453,10 @@ def generate_one(name: str, source_path: Path) -> tuple[Path, Path]:
     link_map, joint_map = merge_maps((link_map, joint_map), (head_link_map, head_joint_map))
     for _line in apply_hand_joint_spec(root, name):
         print(f"[{name}] 관절한계 축소 {_line}")
+    # ★한계 설정 **뒤**에 용접한다 — 순서가 반대면 apply_hand_joint_spec 이 fixed 관절에
+    #   <limit> 을 다시 달아 임포터가 드라이브를 만든다.
+    for _j in lock_hand_joints(root, name):
+        print(f"[{name}] 관절 용접(fixed) {_j}")
     drop_addressing_frames(root)      # ★토큰 질량 부여 **전에** — 없앨 링크에 질량을 줄 이유가 없다
     give_massless_frames_token_mass(root)
     reorder_top_level(root)
