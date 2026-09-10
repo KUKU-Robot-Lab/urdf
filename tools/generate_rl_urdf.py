@@ -278,13 +278,35 @@ def normalize_mesh_uri(uri: str) -> str:
 
 
 def hand_mount_parent_links(root: ET.Element) -> set[str]:
-    """Arm links that carry a replacement hand (parent of a ``*_hj_mount`` joint)."""
+    """Arm flange links that carry a replacement hand, upstream of ``*_hj_mount``.
+
+    ★09.10 The mount joint's parent is no longer always the arm flange: dg5f-m-short
+    inserts an adapter plate (``*_hj_flange_adapter`` -> ``*_hl_flange_adapter``)
+    between link7 and the hand mount. A direct parent lookup silently returned an
+    empty set there, so ``strip_stock_gripper_motor`` and ``make_self_collision_safe``
+    both no-oped and link7 kept its stock-gripper motor and bolted collision -
+    the audit then failed with 8 rest penetrations up to 24.5mm.
+    So walk **up** from the mount joint until an arm flange link is reached; that
+    tolerates any number of intervening adapter links.
+    """
+    child_to_parent = {}
+    for joint in root.findall("joint"):
+        parent, child = joint.find("parent"), joint.find("child")
+        if parent is not None and child is not None:
+            child_to_parent[child.get("link")] = parent.get("link")
+
     parents: set[str] = set()
     for joint in root.findall("joint"):
-        name = joint.get("name") or ""
+        if not (joint.get("name") or "").endswith("_hj_mount"):
+            continue
         parent = joint.find("parent")
-        if name.endswith("_hj_mount") and parent is not None:
-            parents.add(parent.get("link") or "")
+        cur = parent.get("link") if parent is not None else None
+        for _ in range(8):                      # 어댑터가 몇 개 끼어도 견딘다(무한루프 방지)
+            if cur is None or cur in ARM_FLANGE_LINKS:
+                break
+            cur = child_to_parent.get(cur)
+        if cur:
+            parents.add(cur)
     return parents
 
 
@@ -492,6 +514,16 @@ def build_tesollo_maps(
 
         if cfg["mount_joint"] in joint_names:
             add(joint_map, cfg["mount_joint"], f"{s}_hj_mount")
+        # ★09.10 dg5f-m-short 는 플랜지와 손 마운트 사이에 어댑터 판이 들어간다
+        #   (eef/dg5f_m_short_adaptor.xacro). 링크·조인트 두 개가 추가되므로 이름을
+        #   canonical 규약으로 옮긴다 — 안 옮기면 `right_dg5f_short_adaptor` 같은
+        #   조립 단계 이름이 자산에 그대로 남아 manifest·프로필 규약이 깨진다.
+        if f"{side}_dg5f_short_adaptor" in link_names:
+            add(link_map, f"{side}_dg5f_short_adaptor", f"{s}_hl_flange_adapter")
+        if f"mount_{side}_link7_to_adaptor" in joint_names:
+            add(joint_map, f"mount_{side}_link7_to_adaptor", f"{s}_hj_flange_adapter")
+        if f"mount_{side}_adaptor_to_tesollo" in joint_names:
+            add(joint_map, f"mount_{side}_adaptor_to_tesollo", f"{s}_hj_mount")
         if cfg["adapter_joint"] in joint_names:
             add(joint_map, cfg["adapter_joint"], f"{s}_hj_adapter")
         if f"{jp}_dg_base" in joint_names:

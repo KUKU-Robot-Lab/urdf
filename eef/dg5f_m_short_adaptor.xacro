@@ -1,0 +1,51 @@
+<?xml version="1.0"?>
+<!--
+  DG-5F-M-short <-> OpenArm 플랜지 어댑터 판.
+
+  왜 필요한가: dg5f-m-short 는 마운트/베이스 구간이 짧아 OpenArm link7 플랜지에 직접
+  물리지 않는다. 이 판이 둘 사이를 잇는다(사용자 지시 2026-09-10).
+
+  기하: vendor/dg5f_m_short_adaptor/meshes 의 실측 — 55 x 55 x 10 mm 평판(메시 z 0->10).
+        메시 단위는 **mm** 이므로 scale 0.001 이 필수다.
+        결합면: z=0 이 팔 플랜지 쪽, z=10 이 손 마운트 쪽.
+
+  ⚠질량은 **벤더값이 아니다.** 벤더가 재질/질량을 주지 않아 메시 부피(25.600 cm^3,
+    바운딩박스 충전율 84.6%)에 알루미늄 6061(2700 kg/m^3)을 곱해 추정했다 -> 0.06912 kg.
+    관성도 같은 메시로 적분한 값이다(대각, 질량중심 z 4.986mm).
+    벤더가 실제 재질·질량을 주면 그 값으로 교체할 것. 근거: docs/ROBOT_ASSET_SPEC.md §0
+    ("벤더가 안 주는 양은 안 넣는다"의 예외 — 물리 링크는 질량이 없으면 PhysX 에서
+     1kg 유령이 되므로 넣지 않을 수 없다).
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="dg5f_m_short_adaptor">
+
+  <xacro:property name="dg5f_short_adaptor_thickness" value="0.010"/>
+  <xacro:property name="dg5f_short_adaptor_mass" value="0.06912"/>
+  <xacro:property name="dg5f_short_adaptor_dir"
+                 value="/home/user/rl_ws/urdf/vendor/dg5f_m_short_adaptor/meshes"/>
+
+  <xacro:macro name="dg5f_m_short_adaptor" params="prefix:=''">
+    <link name="${prefix}dg5f_short_adaptor">
+      <inertial>
+        <origin xyz="0 0 0.004986" rpy="0 0 0"/>
+        <mass value="${dg5f_short_adaptor_mass}"/>
+        <inertia ixx="1.900e-05" ixy="0.0" ixz="0.0"
+                 iyy="1.900e-05" iyz="0.0" izz="3.686e-05"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="file://${dg5f_short_adaptor_dir}/visual/dg5f_m_short_adaptor.dae"
+                scale="0.001 0.001 0.001"/>
+        </geometry>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="file://${dg5f_short_adaptor_dir}/collision/dg5f_m_short_adaptor.stl"
+                scale="0.001 0.001 0.001"/>
+        </geometry>
+      </collision>
+    </link>
+  </xacro:macro>
+
+</robot>

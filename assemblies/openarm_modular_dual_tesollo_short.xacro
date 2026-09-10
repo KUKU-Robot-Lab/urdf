@@ -22,6 +22,9 @@
   <!-- External dependencies -->
   <xacro:include filename="$(find openarm_description)/urdf/robot/openarm_robot.xacro"/>
 
+  <!-- DG-5F-M-short <-> OpenArm 플랜지 어댑터 판(사용자 지시 09.10) -->
+  <xacro:include filename="../eef/dg5f_m_short_adaptor.xacro"/>
+
   <!-- Tesollo wrappers -->
   <xacro:include filename="../eef/tesollo_left_wrapper.xacro"/>
   <xacro:include filename="../eef/tesollo_right_wrapper.xacro"/>
@@ -88,10 +91,18 @@
     palm_com_xyz="$(arg left_palm_ee_xyz)"
   />
 
-  <joint name="mount_left_link7_to_tesollo" type="fixed">
+  <xacro:dg5f_m_short_adaptor prefix="left_"/>
+
+  <joint name="mount_left_link7_to_adaptor" type="fixed">
     <parent link="openarm_left_link7"/>
-    <child  link="left_base_link"/>
+    <child  link="left_dg5f_short_adaptor"/>
     <origin xyz="$(arg left_mount_xyz)" rpy="$(arg left_mount_rpy)"/>
+  </joint>
+
+  <joint name="mount_left_adaptor_to_tesollo" type="fixed">
+    <parent link="left_dg5f_short_adaptor"/>
+    <child  link="left_base_link"/>
+    <origin xyz="0 0 ${dg5f_short_adaptor_thickness}" rpy="0 0 0"/>
   </joint>
 
   <!-- RIGHT: Tesollo right hand on openarm_right_link7 -->
@@ -101,10 +112,21 @@
     palm_com_xyz="$(arg right_palm_ee_xyz)"
   />
 
-  <joint name="mount_right_link7_to_tesollo" type="fixed">
+  <!-- ★09.10 어댑터 판을 플랜지와 손 마운트 **사이**에 끼운다. 회전은 종전과 같은
+       자리(플랜지->어댑터)에 두고, 어댑터->손은 판 두께 10mm 만 더한다. 판은 55x55
+       정사각이라 z 회전은 기하에 영향이 없다. 결과로 손이 플랜지에서 10mm 멀어진다. -->
+  <xacro:dg5f_m_short_adaptor prefix="right_"/>
+
+  <joint name="mount_right_link7_to_adaptor" type="fixed">
     <parent link="openarm_right_link7"/>
-    <child  link="right_base_link"/>
+    <child  link="right_dg5f_short_adaptor"/>
     <origin xyz="$(arg right_mount_xyz)" rpy="$(arg right_mount_rpy)"/>
+  </joint>
+
+  <joint name="mount_right_adaptor_to_tesollo" type="fixed">
+    <parent link="right_dg5f_short_adaptor"/>
+    <child  link="right_base_link"/>
+    <origin xyz="0 0 ${dg5f_short_adaptor_thickness}" rpy="0 0 0"/>
   </joint>
 
 </robot>

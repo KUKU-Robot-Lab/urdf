@@ -184,6 +184,8 @@ kinematic_joint_order:
   - head_j_pan
   - head_j_tilt
   - head_j_cam_view
+  - l_hj_flange_adapter
+  - r_hj_flange_adapter
 fixed_joint_order:
   - body_j_base
   - r_aj_base
@@ -208,6 +210,8 @@ fixed_joint_order:
   - l_hj_pinky_tip
   - head_j_mount
   - head_j_cam_view
+  - l_hj_flange_adapter
+  - r_hj_flange_adapter
 link_order:
   - body_root
   - body_link
@@ -289,6 +293,8 @@ link_order:
   - head_mid
   - head_camera
   - head_cam_view
+  - l_hl_flange_adapter
+  - r_hl_flange_adapter
 source_to_canonical_joints:
   base_joint2: l_hj_adapter
   dummy_joint: r_hj_adapter
@@ -323,8 +329,10 @@ source_to_canonical_joints:
   lj_dg_5_tip: l_hj_pinky_tip
   lj_dg_base: l_hj_base
   lj_dg_palm: l_hj_palm
-  mount_left_link7_to_tesollo: l_hj_mount
-  mount_right_link7_to_tesollo: r_hj_mount
+  mount_left_adaptor_to_tesollo: l_hj_mount
+  mount_left_link7_to_adaptor: l_hj_flange_adapter
+  mount_right_adaptor_to_tesollo: r_hj_mount
+  mount_right_link7_to_adaptor: r_hj_flange_adapter
   openarm_body_world_joint: body_j_base
   openarm_left_joint1: l_aj_1
   openarm_left_joint2: l_aj_2
@@ -375,6 +383,7 @@ source_to_canonical_links:
   base_link: head_base
   camera_link: head_camera
   left_base_link: l_hl_mount
+  left_dg5f_short_adaptor: l_hl_flange_adapter
   left_palm_ee: l_hl_palm_ee
   left_palm_link: l_hl_palm_alias
   ll_dg_1_1: l_hl_thumb_1
@@ -424,6 +433,7 @@ source_to_canonical_links:
   openarm_right_link6: r_al_6
   openarm_right_link7: r_al_7
   right_base_link: r_hl_mount
+  right_dg5f_short_adaptor: r_hl_flange_adapter
   right_palm_ee: r_hl_palm_ee
   right_palm_link: r_hl_palm_alias
   rl_dg_1_1: r_hl_thumb_1

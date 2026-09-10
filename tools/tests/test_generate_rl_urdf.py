@@ -130,9 +130,17 @@ def test_every_link_has_inertial(name: str) -> None:
         assert mass >= gen.TOKEN_MASS_KG
 
 
+#: 우리가 추가한 링크 — **벤더 손 질량이 아니다**. 벤더 드리프트 검사에서 제외한다.
+#:   `*_hl_flange_adapter` (09.10): dg5f-m-short <-> OpenArm 플랜지 어댑터 판.
+#:   벤더가 재질·질량을 안 줘서 메시 부피 x 알루미늄으로 추정한 값이라(0.06912 kg)
+#:   벤더 합계에 섞이면 드리프트 검사가 의미를 잃는다.
+NON_VENDOR_HAND_LINKS = ("_hl_flange_adapter",)
+
+
 def hand_mass_kg(root: ET.Element, side: str) -> float:
     return sum(float(l.find("inertial/mass").attrib["value"]) for l in root.findall("link")
-               if l.attrib["name"].startswith(f"{side}_hl_"))
+               if l.attrib["name"].startswith(f"{side}_hl_")
+               and not any(l.attrib["name"].endswith(x) for x in NON_VENDOR_HAND_LINKS))
 
 
 def test_dg5f_hand_mass_matches_measurement() -> None:
@@ -353,14 +361,42 @@ def test_adapter_plate_has_no_collision(name: str) -> None:
 
 @pytest.mark.parametrize("name", TESOLLO_NAMES)
 def test_tesollo_mount_flush_on_link7_flange(name: str) -> None:
-    """The hand mount must sit on the link7 flange plane (cropped mesh top),
-    with no gap left by the removed stock-gripper motor section."""
-    joints = joints_by_name(load_urdf(name))
-    mounts = [j for j in ("r_hj_mount", "l_hj_mount") if j in joints]
-    assert mounts, name
-    for joint_name in mounts:
-        _, _, z = origin_xyz(joints[joint_name])
-        assert abs(z - gen.LINK7_FLANGE_Z) < 1e-9, (name, joint_name, z)
+    """The hand chain must start on the link7 flange plane (cropped mesh top),
+    with no gap left by the removed stock-gripper motor section.
+
+    ★09.10 The joint that sits on the flange is no longer always ``*_hj_mount``:
+    dg5f-m-short inserts an adapter plate, so the flange joint is
+    ``*_hj_flange_adapter`` and ``*_hj_mount`` carries only the plate thickness.
+    Check **the joint whose parent is the arm flange link**, whatever it is named,
+    and separately assert that any intervening links only add thickness (z-only,
+    no rotation) so the mount stays flush and axially aligned.
+    """
+    root = load_urdf(name)
+    joints = joints_by_name(root)
+    parent_of = {j.find("child").get("link"): j for j in root.findall("joint")}
+    checked = []
+    for side in ("r", "l"):
+        mount = joints.get(f"{side}_hj_mount")
+        if mount is None:
+            continue
+        # 마운트에서 팔 플랜지까지 거슬러 올라가며 중간 링크의 변환을 모은다.
+        chain, cur = [mount], mount.find("parent").get("link")
+        while cur not in gen.ARM_FLANGE_LINKS and cur in parent_of:
+            chain.append(parent_of[cur])
+            cur = parent_of[cur].find("parent").get("link")
+        assert cur in gen.ARM_FLANGE_LINKS, (name, side, "팔 플랜지까지 못 올라갔다")
+        flange_joint = chain[-1]
+        _, _, z = origin_xyz(flange_joint)
+        assert abs(z - gen.LINK7_FLANGE_Z) < 1e-9, (name, flange_joint.get("name"), z)
+        # 중간(어댑터) 조인트들은 두께만 더해야 한다 — 회전·횡변위가 있으면 마운트가 틀어진다.
+        for j in chain[:-1]:
+            x, y, zz = origin_xyz(j)
+            rpy = (j.find("origin").get("rpy") or "0 0 0") if j.find("origin") is not None else "0 0 0"
+            assert abs(x) < 1e-9 and abs(y) < 1e-9, (name, j.get("name"), "횡변위", x, y)
+            assert all(abs(float(v)) < 1e-9 for v in rpy.split()), (name, j.get("name"), "회전", rpy)
+            assert zz > 0.0, (name, j.get("name"), "두께가 0 이하", zz)
+        checked.append(side)
+    assert checked, name
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -545,3 +581,28 @@ def test_hand_spec_tables_match_the_vendor_isaac_usd():
         assert not bad, f"{rel} 표가 벤더 USD 와 다르다: {bad}"
         assert max_force == {gen.HAND_PEAK_TORQUE_NM}, f"{rel}: maxForce {max_force}"
         assert max_vel == {round(math.degrees(gen.HAND_NO_LOAD_RAD_S), 1)}, f"{rel}: maxJointVelocity {max_vel}"
+
+
+def test_short_flange_adapter_is_present_and_declared_non_vendor() -> None:
+    """dg5f-m-short 만 플랜지 어댑터 판을 갖는다 — 질량은 **추정값**이므로 명시한다.
+
+    벤더가 재질·질량을 주지 않아 메시 부피(25.600 cm^3)에 알루미늄 6061(2700 kg/m^3)을
+    곱해 0.06912 kg 으로 넣었다. 물리 링크는 질량이 없으면 PhysX 에서 1kg 유령이 되므로
+    (docs/ROBOT_ASSET_SPEC.md §0 의 명시적 예외) 넣지 않을 수 없다.
+    벤더가 실제 값을 주면 여기서 깨져야 한다.
+    """
+    for name in ("openarm_dg5f-m_bi", "openarm_dg5f-s_bi"):
+        links = {l.attrib["name"] for l in load_urdf(name).findall("link")}
+        assert not any(n.endswith("_hl_flange_adapter") for n in links), \
+            f"{name} 은 어댑터가 없어야 한다(short 전용)"
+    root = load_urdf("openarm_dg5f-m-short_bi")
+    for side in ("r", "l"):
+        link = [l for l in root.findall("link") if l.attrib["name"] == f"{side}_hl_flange_adapter"]
+        assert link, f"{side}_hl_flange_adapter 가 없다"
+        m = float(link[0].find("inertial/mass").attrib["value"])
+        assert m == pytest.approx(0.06912, abs=1e-5), m
+    # 판 두께 10mm 가 마운트 체인에 정확히 더해져야 한다.
+    joints = joints_by_name(root)
+    for side in ("r", "l"):
+        _, _, z = origin_xyz(joints[f"{side}_hj_mount"])
+        assert z == pytest.approx(0.010, abs=1e-9), (side, z)

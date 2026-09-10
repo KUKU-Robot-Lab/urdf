@@ -1350,6 +1350,44 @@
       <inertia ixx="1e-07" ixy="0" ixz="0" iyy="1e-07" iyz="0" izz="1e-07" />
     </inertial>
   </link>
+  <link name="l_hl_flange_adapter">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0.004986" />
+      <mass value="0.06912" />
+      <inertia ixx="1.900e-05" ixy="0.0" ixz="0.0" iyy="1.900e-05" iyz="0.0" izz="3.686e-05" />
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="file:///home/user/rl_ws/urdf/vendor/dg5f_m_short_adaptor/meshes/visual/dg5f_m_short_adaptor.dae" scale="0.001 0.001 0.001" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="file:///home/user/rl_ws/urdf/vendor/dg5f_m_short_adaptor/meshes/collision/dg5f_m_short_adaptor.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="r_hl_flange_adapter">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0.004986" />
+      <mass value="0.06912" />
+      <inertia ixx="1.900e-05" ixy="0.0" ixz="0.0" iyy="1.900e-05" iyz="0.0" izz="3.686e-05" />
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="file:///home/user/rl_ws/urdf/vendor/dg5f_m_short_adaptor/meshes/visual/dg5f_m_short_adaptor.dae" scale="0.001 0.001 0.001" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="file:///home/user/rl_ws/urdf/vendor/dg5f_m_short_adaptor/meshes/collision/dg5f_m_short_adaptor.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </collision>
+  </link>
   <joint name="body_j_base" type="fixed">
     <parent link="body_root" />
     <child link="body_link" />
@@ -1410,9 +1448,9 @@
     <limit effort="7" lower="-1.570796" upper="1.570796" velocity="20.943946" />
   </joint>
   <joint name="r_hj_mount" type="fixed">
-    <parent link="r_al_7" />
+    <parent link="r_hl_flange_adapter" />
     <child link="r_hl_adapter" />
-    <origin rpy="0 0 -1.5707964" xyz="0 0.0000003 0.0495" />
+    <origin rpy="0 0 0" xyz="0 0 0.01" />
   </joint>
   <joint name="r_hj_base" type="fixed">
     <parent link="r_hl_adapter" />
@@ -1649,9 +1687,9 @@
     <limit effort="7" lower="-1.570796" upper="1.570796" velocity="20.943946" />
   </joint>
   <joint name="l_hj_mount" type="fixed">
-    <parent link="l_al_7" />
+    <parent link="l_hl_flange_adapter" />
     <child link="l_hl_adapter" />
-    <origin rpy="0 0 1.5707964" xyz="0 0 0.0495" />
+    <origin rpy="0 0 0" xyz="0 0 0.01" />
   </joint>
   <joint name="l_hj_base" type="fixed">
     <parent link="l_hl_adapter" />
@@ -1858,5 +1896,15 @@
     <parent link="head_camera" />
     <child link="head_cam_view" />
     <origin xyz="0.01236 0.044096 0.036317" rpy="0 0 0" />
+  </joint>
+  <joint name="l_hj_flange_adapter" type="fixed">
+    <parent link="l_al_7" />
+    <child link="l_hl_flange_adapter" />
+    <origin rpy="0 0 1.5707964" xyz="0 0 0.0495" />
+  </joint>
+  <joint name="r_hj_flange_adapter" type="fixed">
+    <parent link="r_al_7" />
+    <child link="r_hl_flange_adapter" />
+    <origin rpy="0 0 -1.5707964" xyz="0 0.0000003 0.0495" />
   </joint>
 </robot>
