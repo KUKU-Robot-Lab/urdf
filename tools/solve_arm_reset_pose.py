@@ -100,6 +100,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--link", default="r_hl_palm")
     ap.add_argument("--joints", default=r"r_aj_([1-7])")
     ap.add_argument("--rot-weight", type=float, default=0.3, help="회전 오차 가중(m/rad)")
+    ap.add_argument("--target-offset", default=None,
+                    help="src 포즈에서 이만큼 **평행이동**한 곳을 목표로 (dx,dy,dz m). "
+                         "회전은 src 그대로 — 같은 접근 자세를 유지하며 물러날 때 쓴다.")
     args = ap.parse_args(argv)
 
     src, dst = Urdf(args.src), Urdf(args.dst)
@@ -114,6 +117,9 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"관절 수 불일치: names {len(names)} · src-q {len(q_src)} · seed {len(seed)}")
 
     T_tgt = src.pose(args.link, dict(zip(names, q_src)))
+    if args.target_offset:
+        T_tgt = T_tgt.copy()
+        T_tgt[:3, 3] = T_tgt[:3, 3] + np.array([float(v) for v in args.target_offset.split(",")])
     lo = np.array([dst.joints[n]["lo"] for n in names])
     hi = np.array([dst.joints[n]["hi"] for n in names])
 
