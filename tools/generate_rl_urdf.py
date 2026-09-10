@@ -823,34 +823,52 @@ def scale_hand_masses(root: ET.Element, target_kg: float) -> dict[str, float]:
 # ══════════════════════════════════════════════════════════════════════════════
 _D = math.radians
 
-#: 매뉴얼 §3.1 — 전 관절 공통(모터가 20개 모두 같다).
-HAND_PEAK_TORQUE_NM = 2.0        # Peak Torque of Each Joint (Stall torque)
-HAND_RATED_TORQUE_NM = 0.4       # Rated Torque — 연속 사용 목표(자산에는 안 싣는다)
-HAND_NO_LOAD_RAD_S = 75.0 * 2.0 * math.pi / 60.0     # 75 RPM
+#: ★09.10 출처 전환 — **벤더 Isaac Sim 자산**이 sim 물리값의 기준이다.
+#:   `repo/tesollo/tesollo_model/dg5f*/usd/*/configuration/*_physics.usd` (Tesollo 배포).
+#:   매뉴얼(§3.1/§3.3.1)과 어긋나는 곳이 있으나, 우리가 만드는 것은 **sim 자산**이므로
+#:   벤더가 sim 용으로 배포한 값을 따른다. 어긋나는 곳(사용자 확정 09.10):
+#:     effort   USD 7.5 N·m   vs 매뉴얼 stall 2.0    -> USD
+#:     velocity USD 180 deg/s vs 매뉴얼 75RPM 7.854  -> USD
+#:     middle_1 USD [-25,25]  vs 매뉴얼 [-30,30]     -> USD
+#:   매뉴얼 정격(연속) 0.4 N·m 경고는 유효하다 — 파지 유지 토크는 계속 감시할 것.
+HAND_PEAK_TORQUE_NM = 7.5        # drive:angular:physics:maxForce (전 변종 동일)
+HAND_RATED_TORQUE_NM = 0.4       # 매뉴얼 Rated Torque — 연속 사용 목표(자산에는 안 싣는다)
+HAND_NO_LOAD_RAD_S = math.radians(180.0)             # physxJoint:maxJointVelocity 180 deg/s
 
-#: 매뉴얼 §3.3.1 오른손 Motor 1..20 → 관절 접미사. 좌우는 미러라 같은 표를 쓴다.
+#: DG-5F(-M) — 벤더 USD `dg5f_right`. `dg5f_right_short` 와 한계가 **완전히 같다**(실측 대조).
 _DG5F_M_RANGE_DEG: dict[str, tuple[float, float]] = {
     "thumb_1": (-22, 77), "thumb_2": (-155, 0), "thumb_3": (-90, 90), "thumb_4": (-90, 90),
     "index_1": (-31, 20), "index_2": (0, 115), "index_3": (-90, 90), "index_4": (-90, 90),
-    "middle_1": (-30, 30), "middle_2": (0, 115), "middle_3": (-90, 90), "middle_4": (-90, 90),
+    "middle_1": (-25, 25), "middle_2": (0, 115), "middle_3": (-90, 90), "middle_4": (-90, 90),
     "ring_1": (-15, 32), "ring_2": (0, 110), "ring_3": (-90, 90), "ring_4": (-90, 90),
     "pinky_1": (0, 60), "pinky_2": (-15, 90), "pinky_3": (-90, 90), "pinky_4": (-90, 90),
 }
 
+#: DG-5F-S — 벤더 USD `dg5fs_right`. **다른 손이다**(엄지 회전 전범위, 굽힘 범위가 더 넓다).
+#:   15dof 변종과도 한계는 같다(실측 대조).
+_DG5F_S_RANGE_DEG: dict[str, tuple[float, float]] = {
+    "thumb_1": (-90, 90), "thumb_2": (-153, 0), "thumb_3": (-90, 90), "thumb_4": (-90, 90),
+    "index_1": (-48, 15), "index_2": (0, 126), "index_3": (-90, 90), "index_4": (-90, 90),
+    "middle_1": (-33, 42), "middle_2": (0, 130), "middle_3": (-90, 90), "middle_4": (-90, 90),
+    "ring_1": (-12, 48), "ring_2": (0, 127), "ring_3": (-90, 90), "ring_4": (-90, 90),
+    "pinky_1": (0, 60), "pinky_2": (-37, 90), "pinky_3": (-90, 90), "pinky_4": (-90, 90),
+}
+
+
+def _spec_from_deg(table: dict[str, tuple[float, float]]) -> dict[str, tuple[float, float]]:
+    return {rf"[rl]_hj_{suffix}$": (_D(lo), _D(hi)) for suffix, (lo, hi) in table.items()}
+
+
 #: 자산 → 손 관절 사양. **미등록은 빌드 에러**(벤더 URDF placeholder 를 조용히 쓰지 않게).
 #: 값은 {정규식: (lower_rad, upper_rad)} 이고, effort/velocity 는 전 손관절 공통이다.
 HAND_JOINT_SPEC: dict[str, dict[str, tuple[float, float]] | None] = {
-    # 매뉴얼을 아직 대조하지 않은 자산 — None 이면 벤더 URDF 값을 그대로 둔다(사실을 남긴다).
-    "openarm_dg5f-m-short_bi": None,
-    "openarm_dg5f-s_bi": None,
-    "openarm_rh56f1_bi": None,
-    "openarm_gripper_bi": None,
-    "openarm_dg5f-m_bi": {
-        rf"[rl]_hj_{_suffix}$": (_D(_lo), _D(_hi))
-        for _suffix, (_lo, _hi) in _DG5F_M_RANGE_DEG.items()
-    },
+    # 벤더 Isaac USD 를 대조하지 않은 자산 — None 이면 벤더 URDF 값을 그대로 둔다.
+    "openarm_rh56f1_bi": None,        # Inspire — Tesollo 자산이 아니다
+    "openarm_gripper_bi": None,       # 스톡 2지 그리퍼 — 손이 아니다
+    "openarm_dg5f-m_bi": _spec_from_deg(_DG5F_M_RANGE_DEG),
+    "openarm_dg5f-m-short_bi": _spec_from_deg(_DG5F_M_RANGE_DEG),
+    "openarm_dg5f-s_bi": _spec_from_deg(_DG5F_S_RANGE_DEG),
 }
-
 
 
 def apply_hand_joint_spec(root: ET.Element, asset: str) -> list[str]:

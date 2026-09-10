@@ -1542,28 +1542,28 @@
     <parent link="r_hl_palm" />
     <child link="r_hl_thumb_1" />
     <axis xyz="1 0 0" />
-    <limit effort="2" lower="-0.383972" upper="1.3439" velocity="7.854" />
+    <limit effort="7.5" lower="-0.383972" upper="1.3439" velocity="3.142" />
   </joint>
   <joint name="r_hj_thumb_2" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.04195 0.0 0.0" />
     <parent link="r_hl_thumb_1" />
     <child link="r_hl_thumb_2" />
     <axis xyz="0 0 1" />
-    <limit effort="2" lower="-2.70526" upper="0" velocity="7.854" />
+    <limit effort="7.5" lower="-2.70526" upper="0" velocity="3.142" />
   </joint>
   <joint name="r_hj_thumb_3" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.031 0.0" />
     <parent link="r_hl_thumb_2" />
     <child link="r_hl_thumb_3" />
     <axis xyz="1 0 0" />
-    <limit effort="2" lower="-1.5708" upper="1.5708" velocity="7.854" />
+    <limit effort="7.5" lower="-1.5708" upper="1.5708" velocity="3.142" />
   </joint>
   <joint name="r_hj_thumb_4" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0388 0.0" />
     <parent link="r_hl_thumb_3" />
     <child link="r_hl_thumb_4" />
     <axis xyz="1 0 0" />
-    <limit effort="2" lower="-1.5708" upper="1.5708" velocity="7.854" />
+    <limit effort="7.5" lower="-1.5708" upper="1.5708" velocity="3.142" />
   </joint>
   <joint name="r_hj_thumb_tip" type="fixed">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0363 0.0" />
@@ -1575,28 +1575,28 @@
     <parent link="r_hl_palm" />
     <child link="r_hl_index_1" />
     <axis xyz="1 0 0" />
-    <limit effort="2" lower="-0.541052" upper="0.349066" velocity="7.854" />
+    <limit effort="7.5" lower="-0.541052" upper="0.349066" velocity="3.142" />
   </joint>
   <joint name="r_hj_index_2" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.01765 0.0 0.0265" />
     <parent link="r_hl_index_1" />
     <child link="r_hl_index_2" />
     <axis xyz="0 1 0" />
-    <limit effort="2" lower="0" upper="2.00713" velocity="7.854" />
+    <limit effort="7.5" lower="0" upper="2.00713" velocity="3.142" />
   </joint>
   <joint name="r_hj_index_3" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0388" />
     <parent link="r_hl_index_2" />
     <child link="r_hl_index_3" />
     <axis xyz="0 1 0" />
-    <limit effort="2" lower="-1.5708" upper="1.5708" velocity="7.854" />
+    <limit effort="7.5" lower="-1.5708" upper="1.5708" velocity="3.142" />
   </joint>
   <joint name="r_hj_index_4" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0388" />
     <parent link="r_hl_index_3" />
     <child link="r_hl_index_4" />
     <axis xyz="0 1 0" />
-    <limit effort="2" lower="-1.5708" upper="1.5708" velocity="7.854" />
+    <limit effort="7.5" lower="-1.5708" upper="1.5708" velocity="3.142" />
   </joint>
   <joint name="r_hj_index_tip" type="fixed">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0255" />
@@ -1608,28 +1608,28 @@
     <parent link="r_hl_palm" />
     <child link="r_hl_middle_1" />
     <axis xyz="1 0 0" />
-    <limit effort="2" lower="-0.523599" upper="0.523599" velocity="7.854" />
+    <limit effort="7.5" lower="-0.436332" upper="0.436332" velocity="3.142" />
   </joint>
   <joint name="r_hj_middle_2" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.01765 0.0 0.0265" />
     <parent link="r_hl_middle_1" />
     <child link="r_hl_middle_2" />
     <axis xyz="0 1 0" />
-    <limit effort="2" lower="0" upper="2.00713" velocity="7.854" />
+    <limit effort="7.5" lower="0" upper="2.00713" velocity="3.142" />
   </joint>
   <joint name="r_hj_middle_3" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0388" />
     <parent link="r_hl_middle_2" />
     <child link="r_hl_middle_3" />
     <axis xyz="0 1 0" />
-    <limit effort="2" lower="-1.5708" upper="1.5708" velocity="7.854" />
+    <limit effort="7.5" lower="-1.5708" upper="1.5708" velocity="3.142" />
   </joint>
   <joint name="r_hj_middle_4" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0388" />
     <parent link="r_hl_middle_3" />
     <child link="r_hl_middle_4" />
     <axis xyz="0 1 0" />
-    <limit effort="2" lower="-1.5708" upper="1.5708" velocity="7.854" />
+    <limit effort="7.5" lower="-1.5708" upper="1.5708" velocity="3.142" />
   </joint>
   <joint name="r_hj_middle_tip" type="fixed">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0255" />
@@ -1641,28 +1641,28 @@
     <parent link="r_hl_palm" />
     <child link="r_hl_ring_1" />
     <axis xyz="1 0 0" />
-    <limit effort="2" lower="-0.261799" upper="0.558505" velocity="7.854" />
+    <limit effort="7.5" lower="-0.261799" upper="0.558505" velocity="3.142" />
   </joint>
   <joint name="r_hj_ring_2" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.01765 0.0 0.0265" />
     <parent link="r_hl_ring_1" />
     <child link="r_hl_ring_2" />
     <axis xyz="0 1 0" />
-    <limit effort="2" lower="0" upper="1.91986" velocity="7.854" />
+    <limit effort="7.5" lower="0" upper="1.91986" velocity="3.142" />
   </joint>
   <joint name="r_hj_ring_3" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0388" />
     <parent link="r_hl_ring_2" />
     <child link="r_hl_ring_3" />
     <axis xyz="0 1 0" />
-    <limit effort="2" lower="-1.5708" upper="1.5708" velocity="7.854" />
+    <limit effort="7.5" lower="-1.5708" upper="1.5708" velocity="3.142" />
   </joint>
   <joint name="r_hj_ring_4" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0388" />
     <parent link="r_hl_ring_3" />
     <child link="r_hl_ring_4" />
     <axis xyz="0 1 0" />
-    <limit effort="2" lower="-1.5708" upper="1.5708" velocity="7.854" />
+    <limit effort="7.5" lower="-1.5708" upper="1.5708" velocity="3.142" />
   </joint>
   <joint name="r_hj_ring_tip" type="fixed">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0255" />
@@ -1674,28 +1674,28 @@
     <parent link="r_hl_palm" />
     <child link="r_hl_pinky_1" />
     <axis xyz="0 0 1" />
-    <limit effort="2" lower="0" upper="1.0472" velocity="7.854" />
+    <limit effort="7.5" lower="0" upper="1.0472" velocity="3.142" />
   </joint>
   <joint name="r_hj_pinky_2" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 -0.028 0.0381" />
     <parent link="r_hl_pinky_1" />
     <child link="r_hl_pinky_2" />
     <axis xyz="1 0 0" />
-    <limit effort="2" lower="-0.261799" upper="1.5708" velocity="7.854" />
+    <limit effort="7.5" lower="-0.261799" upper="1.5708" velocity="3.142" />
   </joint>
   <joint name="r_hj_pinky_3" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.031" />
     <parent link="r_hl_pinky_2" />
     <child link="r_hl_pinky_3" />
     <axis xyz="0 1 0" />
-    <limit effort="2" lower="-1.5708" upper="1.5708" velocity="7.854" />
+    <limit effort="7.5" lower="-1.5708" upper="1.5708" velocity="3.142" />
   </joint>
   <joint name="r_hj_pinky_4" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0388" />
     <parent link="r_hl_pinky_3" />
     <child link="r_hl_pinky_4" />
     <axis xyz="0 1 0" />
-    <limit effort="2" lower="-1.5708" upper="1.5708" velocity="7.854" />
+    <limit effort="7.5" lower="-1.5708" upper="1.5708" velocity="3.142" />
   </joint>
   <joint name="r_hj_pinky_tip" type="fixed">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0363" />
@@ -1781,28 +1781,28 @@
     <parent link="l_hl_palm" />
     <child link="l_hl_thumb_1" />
     <axis xyz="1 0 0" />
-    <limit effort="2" lower="-1.3439" upper="0.383972" velocity="7.854" />
+    <limit effort="7.5" lower="-1.3439" upper="0.383972" velocity="3.142" />
   </joint>
   <joint name="l_hj_thumb_2" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.04195 0.0 0.0" />
     <parent link="l_hl_thumb_1" />
     <child link="l_hl_thumb_2" />
     <axis xyz="0 0 1" />
-    <limit effort="2" lower="-0" upper="2.70526" velocity="7.854" />
+    <limit effort="7.5" lower="-0" upper="2.70526" velocity="3.142" />
   </joint>
   <joint name="l_hj_thumb_3" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 -0.031 0.0" />
     <parent link="l_hl_thumb_2" />
     <child link="l_hl_thumb_3" />
     <axis xyz="1 0 0" />
-    <limit effort="2" lower="-1.5708" upper="1.5708" velocity="7.854" />
+    <limit effort="7.5" lower="-1.5708" upper="1.5708" velocity="3.142" />
   </joint>
   <joint name="l_hj_thumb_4" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 -0.0388 0.0" />
     <parent link="l_hl_thumb_3" />
     <child link="l_hl_thumb_4" />
     <axis xyz="1 0 0" />
-    <limit effort="2" lower="-1.5708" upper="1.5708" velocity="7.854" />
+    <limit effort="7.5" lower="-1.5708" upper="1.5708" velocity="3.142" />
   </joint>
   <joint name="l_hj_thumb_tip" type="fixed">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 -0.0363 0.0" />
@@ -1814,28 +1814,28 @@
     <parent link="l_hl_palm" />
     <child link="l_hl_index_1" />
     <axis xyz="1 0 0" />
-    <limit effort="2" lower="-0.349066" upper="0.541052" velocity="7.854" />
+    <limit effort="7.5" lower="-0.349066" upper="0.541052" velocity="3.142" />
   </joint>
   <joint name="l_hj_index_2" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.01765 0.0 0.0265" />
     <parent link="l_hl_index_1" />
     <child link="l_hl_index_2" />
     <axis xyz="0 1 0" />
-    <limit effort="2" lower="0" upper="2.00713" velocity="7.854" />
+    <limit effort="7.5" lower="0" upper="2.00713" velocity="3.142" />
   </joint>
   <joint name="l_hj_index_3" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0388" />
     <parent link="l_hl_index_2" />
     <child link="l_hl_index_3" />
     <axis xyz="0 1 0" />
-    <limit effort="2" lower="-1.5708" upper="1.5708" velocity="7.854" />
+    <limit effort="7.5" lower="-1.5708" upper="1.5708" velocity="3.142" />
   </joint>
   <joint name="l_hj_index_4" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0388" />
     <parent link="l_hl_index_3" />
     <child link="l_hl_index_4" />
     <axis xyz="0 1 0" />
-    <limit effort="2" lower="-1.5708" upper="1.5708" velocity="7.854" />
+    <limit effort="7.5" lower="-1.5708" upper="1.5708" velocity="3.142" />
   </joint>
   <joint name="l_hj_index_tip" type="fixed">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0255" />
@@ -1847,28 +1847,28 @@
     <parent link="l_hl_palm" />
     <child link="l_hl_middle_1" />
     <axis xyz="1 0 0" />
-    <limit effort="2" lower="-0.523599" upper="0.523599" velocity="7.854" />
+    <limit effort="7.5" lower="-0.436332" upper="0.436332" velocity="3.142" />
   </joint>
   <joint name="l_hj_middle_2" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.01765 0.0 0.0265" />
     <parent link="l_hl_middle_1" />
     <child link="l_hl_middle_2" />
     <axis xyz="0 1 0" />
-    <limit effort="2" lower="0" upper="2.00713" velocity="7.854" />
+    <limit effort="7.5" lower="0" upper="2.00713" velocity="3.142" />
   </joint>
   <joint name="l_hj_middle_3" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0388" />
     <parent link="l_hl_middle_2" />
     <child link="l_hl_middle_3" />
     <axis xyz="0 1 0" />
-    <limit effort="2" lower="-1.5708" upper="1.5708" velocity="7.854" />
+    <limit effort="7.5" lower="-1.5708" upper="1.5708" velocity="3.142" />
   </joint>
   <joint name="l_hj_middle_4" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0388" />
     <parent link="l_hl_middle_3" />
     <child link="l_hl_middle_4" />
     <axis xyz="0 1 0" />
-    <limit effort="2" lower="-1.5708" upper="1.5708" velocity="7.854" />
+    <limit effort="7.5" lower="-1.5708" upper="1.5708" velocity="3.142" />
   </joint>
   <joint name="l_hj_middle_tip" type="fixed">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0255" />
@@ -1880,28 +1880,28 @@
     <parent link="l_hl_palm" />
     <child link="l_hl_ring_1" />
     <axis xyz="1 0 0" />
-    <limit effort="2" lower="-0.558505" upper="0.261799" velocity="7.854" />
+    <limit effort="7.5" lower="-0.558505" upper="0.261799" velocity="3.142" />
   </joint>
   <joint name="l_hj_ring_2" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.01765 0.0 0.0265" />
     <parent link="l_hl_ring_1" />
     <child link="l_hl_ring_2" />
     <axis xyz="0 1 0" />
-    <limit effort="2" lower="0" upper="1.91986" velocity="7.854" />
+    <limit effort="7.5" lower="0" upper="1.91986" velocity="3.142" />
   </joint>
   <joint name="l_hj_ring_3" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0388" />
     <parent link="l_hl_ring_2" />
     <child link="l_hl_ring_3" />
     <axis xyz="0 1 0" />
-    <limit effort="2" lower="-1.5708" upper="1.5708" velocity="7.854" />
+    <limit effort="7.5" lower="-1.5708" upper="1.5708" velocity="3.142" />
   </joint>
   <joint name="l_hj_ring_4" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0388" />
     <parent link="l_hl_ring_3" />
     <child link="l_hl_ring_4" />
     <axis xyz="0 1 0" />
-    <limit effort="2" lower="-1.5708" upper="1.5708" velocity="7.854" />
+    <limit effort="7.5" lower="-1.5708" upper="1.5708" velocity="3.142" />
   </joint>
   <joint name="l_hj_ring_tip" type="fixed">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0255" />
@@ -1913,28 +1913,28 @@
     <parent link="l_hl_palm" />
     <child link="l_hl_pinky_1" />
     <axis xyz="0 0 1" />
-    <limit effort="2" lower="-1.0472" upper="-0" velocity="7.854" />
+    <limit effort="7.5" lower="-1.0472" upper="-0" velocity="3.142" />
   </joint>
   <joint name="l_hj_pinky_2" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.028 0.0381" />
     <parent link="l_hl_pinky_1" />
     <child link="l_hl_pinky_2" />
     <axis xyz="1 0 0" />
-    <limit effort="2" lower="-1.5708" upper="0.261799" velocity="7.854" />
+    <limit effort="7.5" lower="-1.5708" upper="0.261799" velocity="3.142" />
   </joint>
   <joint name="l_hj_pinky_3" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.031" />
     <parent link="l_hl_pinky_2" />
     <child link="l_hl_pinky_3" />
     <axis xyz="0 1 0" />
-    <limit effort="2" lower="-1.5708" upper="1.5708" velocity="7.854" />
+    <limit effort="7.5" lower="-1.5708" upper="1.5708" velocity="3.142" />
   </joint>
   <joint name="l_hj_pinky_4" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0388" />
     <parent link="l_hl_pinky_3" />
     <child link="l_hl_pinky_4" />
     <axis xyz="0 1 0" />
-    <limit effort="2" lower="-1.5708" upper="1.5708" velocity="7.854" />
+    <limit effort="7.5" lower="-1.5708" upper="1.5708" velocity="3.142" />
   </joint>
   <joint name="l_hj_pinky_tip" type="fixed">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0363" />
