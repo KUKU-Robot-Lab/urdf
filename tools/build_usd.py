@@ -409,6 +409,7 @@ def convert(asset: str) -> Path:
         )
     collider_type = policy["default"]
     hull_links = list(policy.get("convex_hull_links") or [])
+    decomp_links = list(policy.get("convex_decomposition_links") or [])
 
     out_dir = RL_DIR / asset
     converter_cfg = UrdfConverterCfg(
@@ -436,13 +437,16 @@ def convert(asset: str) -> Path:
     graft_head_v1(usd_path, asset)
     if hull_links:
         override_link_approximation(usd_path, asset, hull_links, "convexHull")
+    if decomp_links:
+        override_link_approximation(usd_path, asset, decomp_links, "convexDecomposition")
     rgb_frame = (manifest.get("camera_view_frame") or {}).get("rgb_lens_usd_frame")
     if not rgb_frame:
         raise SystemExit(f"[{asset}] manifest camera_view_frame has no rgb_lens_usd_frame - regenerate the URDF")
     _RGB_FRAME[asset] = rgb_frame
     # ★head 검증은 sync 후로 옮겼다 — 참조가 상대경로라 hdgp 배치에서만 해석된다.
     verify_contract(usd_path, manifest, asset, urdf_path, want=APPROX_TOKEN[collider_type],
-                    per_link_want={l: "convexHull" for l in hull_links})
+                    per_link_want={**{l: "convexHull" for l in hull_links},
+                                   **{l: "convexDecomposition" for l in decomp_links}})
     patch_and_verify_mimic_joints(usd_path, asset, urdf_path)
     apply_collision_filters(usd_path, urdf_path, asset,
                             [tuple(p) for p in manifest["self_collision_filtered_pairs"]])

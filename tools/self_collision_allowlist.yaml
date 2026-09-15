@@ -52,29 +52,14 @@ pairs:
   - links: ["*_hl_thumb_3", "*_hl_thumb_[st]*"]
     accept_raw: true
     reason: RH56F1 thumb pads wrap across the knuckle by design.
+  # ★2026-09-15 force_filter: filtered in the built USD even when the exact-hull audit finds no penetration.
+  #   After palm_2 became convexDecomposition (palm_sensor exposure), the thumb_2 sweep (0 -> 0.45 rad,
+  #   self-collision ON, probe_rh56f1_finger_sweep.py --contacts) measured 52.8 N thumb_2 <-> palm_2 - the
+  #   decomposition pieces reach the nested thumb root that the hull audit never flags.
   - links: ["*_hl_palm_2", "*_hl_thumb_2"]
     accept_raw: true
+    force_filter: true
     reason: RH56F1 thumb root nests into the palm shell by design.
-  # ★2026-09-15 force_filter: pairs collision-filtered in the built USD even when the exact-hull audit
-  #   finds no penetration. PhysX cooks a larger hull (64-vertex cap) than the audit's exact hull: with
-  #   self-collision ON, hdgp probe_rh56f1_finger_sweep.py --contacts measured 117~558 N standing
-  #   contacts between each RH56F1 finger's sensor pad and tip (siblings fixed to the same segment 2 -
-  #   PhysX excludes only parent/child pairs). Same-finger, right side only; left is mirrored.
-  - links: ["r_hl_thumb_sensor", "r_hl_thumb_tip"]
-    force_filter: true
-    reason: RH56F1 thumb sensor pad and tip are rigid siblings on one segment; PhysX hulls touch (probe 09.15).
-  - links: ["r_hl_index_sensor", "r_hl_index_tip"]
-    force_filter: true
-    reason: RH56F1 index sensor pad and tip are rigid siblings on one segment; PhysX hulls touch (probe 09.15).
-  - links: ["r_hl_middle_sensor", "r_hl_middle_tip"]
-    force_filter: true
-    reason: RH56F1 middle sensor pad and tip are rigid siblings on one segment; PhysX hulls touch (probe 09.15).
-  - links: ["r_hl_ring_sensor", "r_hl_ring_tip"]
-    force_filter: true
-    reason: RH56F1 ring sensor pad and tip are rigid siblings on one segment; PhysX hulls touch (probe 09.15).
-  - links: ["r_hl_pinky_sensor", "r_hl_pinky_tip"]
-    force_filter: true
-    reason: RH56F1 pinky sensor pad and tip are rigid siblings on one segment; PhysX hulls touch (probe 09.15).
   - links: ["*_hl_palm_1", "*_hl_[imrp]*_1"]
     reason: >-
       RH56F1 palm_1 back cover wraps the four finger roots (hinged inside it);

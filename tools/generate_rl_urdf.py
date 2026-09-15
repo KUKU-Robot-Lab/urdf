@@ -144,6 +144,55 @@ COLLIDER_DEVIATIONS: dict[str, tuple[str, str]] = {
     ),
 }
 
+# ★2026-09-15 RH56F1 손끝 3중 collider 제거 (사용자 결정: "sensor 링크는 실제 힘측정 부위 — 살려야 한다").
+#   벤더 STL 의 `{f}_2`·`{f}_force_sensor`·`{f}_tip`(엄지 thumb_4·thumb_force_sensor·thumb_tip)은 같은 자리의
+#   같은 입체다(월드 중심·크기 동일, 검지 hull 7.16 cm³ 셋 다) — 강체 셋이 한 마디에 겹쳐 접촉이 임의로 나뉘었다.
+#   collider 는 `_sensor` 에만 남기고, 나머지는 visual·질량·프레임만 유지한다.
+RH56F1_COLLISION_DROP_LINKS = frozenset(
+    f"{side}_hl_{link}"
+    for side in ("r", "l")
+    for link in ("thumb_4", "thumb_tip", *(f"{f}_{k}" for f in ("index", "middle", "ring", "pinky") for k in ("2", "tip")))
+)
+COLLISION_DROP_LINKS: dict[str, frozenset[str]] = {"openarm_rh56f1_bi": RH56F1_COLLISION_DROP_LINKS}
+
+
+def drop_duplicate_collisions(root: ET.Element, asset: str) -> list[str]:
+    """COLLISION_DROP_LINKS 의 링크에서 collision 만 뗀다. 이름이 하나라도 없으면 실패한다(조용한 무효 방지)."""
+    targets = COLLISION_DROP_LINKS.get(asset, frozenset())
+    dropped = []
+    for link in root.findall("link"):
+        if link.get("name") in targets:
+            for collision in link.findall("collision"):
+                link.remove(collision)
+            dropped.append(link.get("name"))
+    missing = targets - set(dropped)
+    if missing:
+        raise RuntimeError(f"{asset}: COLLISION_DROP_LINKS 에 없는 링크 {sorted(missing)}")
+    return sorted(dropped)
+
+
+# ★2026-09-15 링크 단위 decomposition 예외 (사용자 결정: palm_sensor 가 접촉을 받게 한다).
+#   RH56F1 palm_1·palm_2 는 손바닥을 감싸는 오목 껍질이라 hull 이 palm_sensor 패드 면을 1~5 mm 덮는다
+#   (패드 면 1 mm 바깥 점의 96 %/74 % 가 각 hull 안) — 컵이 센서보다 껍질 hull 에 먼저 닿는다.
+#   두 껍질만 decomposition, 나머지는 hull 유지. 둘을 빼면 손바닥 앞면 65 % 가 빈다(빼지 않는 이유).
+# ★2026-09-15 body_link 도 decomposition (사용자 원칙: "가짜 메쉬로 인한 충돌은 없어야 한다 — 필터로 가리지 말고
+#   형상을 바로잡는다"). 팔 영자세 RH56F1 중지 1.2 rad 가 몸통과 원본 46 mm·감사 hull 18 mm 떨어져 있는데
+#   PhysX 는 middle_sensor↔body_link 2.25 N, 편 엄지 외전은 손바닥 25.6 mm 밀림 — 큰 기둥을 GPU hull
+#   (64 꼭짓점 제한)로 구우면 수십 mm 부푼다.
+DECOMPOSITION_LINKS: dict[str, frozenset[str]] = {
+    "openarm_rh56f1_bi": frozenset(
+        {"body_link", *(f"{side}_hl_{link}" for side in ("r", "l") for link in ("palm_1", "palm_2"))}),
+}
+
+
+def convex_decomposition_links(root: ET.Element, asset: str) -> list[str]:
+    """USD 빌드가 convexDecomposition 으로 굽는 링크. 이름이 하나라도 없으면 실패한다."""
+    wanted = DECOMPOSITION_LINKS.get(asset, frozenset())
+    missing = wanted - {link.get("name") for link in root.findall("link")}
+    if missing:
+        raise RuntimeError(f"{asset}: DECOMPOSITION_LINKS 에 없는 링크 {sorted(missing)}")
+    return sorted(wanted)
+
 
 def collider_default(asset: str) -> str:
     """자산의 collision 근사. 기본은 벤더 검증값(hull), 벗어나면 사유가 있어야 한다."""
@@ -1303,8 +1352,11 @@ def write_manifest(
     # vendor's own Isaac conversion config (convex_hull) governs - see that constant.
     text.append("collision_approximation:\n")
     text.append(f"  default: {collider_default(urdf_path.stem.removesuffix('_rl'))}\n")
+    decomposition = convex_decomposition_links(root, urdf_path.stem.removesuffix("_rl"))
     text.append("  convex_hull_links:\n")
-    text.append(yaml_list(convex_hull_links(root), indent=2))
+    text.append(yaml_list([link for link in convex_hull_links(root) if link not in decomposition], indent=2))
+    text.append("  convex_decomposition_links:\n")
+    text.append(yaml_list(decomposition, indent=2))
     text.append("schema:\n")
     text.append("  body_root: stage-level root link with no geometry\n")
     text.append("  body_link: openarm physical base link\n")
@@ -1372,6 +1424,9 @@ def generate_one(name: str, source_path: Path) -> tuple[Path, Path]:
         print(f"[{name}] 관절 용접(fixed) {_j}")
     drop_addressing_frames(root)      # ★토큰 질량 부여 **전에** — 없앨 링크에 질량을 줄 이유가 없다
     give_massless_frames_token_mass(root)
+    dropped = drop_duplicate_collisions(root, name)
+    if dropped:
+        print(f"[{name}] 중복 collision 제거 {len(dropped)}개: {dropped}")
     reorder_top_level(root)
     control = control_joint_order(root)
     validate(root, control)

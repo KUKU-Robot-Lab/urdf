@@ -75,13 +75,10 @@ def test_filtered_pairs_mirror_requires_existing_links() -> None:
 
 
 def test_force_filter_pairs_added_without_findings() -> None:
-    """allowlist `force_filter`: RH56F1 sensor pad<->tip of the same finger is filtered on BOTH sides
-    with no audited penetration (PhysX-cooked hulls touch: 117~558 N standing contact, probe 09.15),
-    and never across fingers."""
+    """allowlist `force_filter`: RH56F1 thumb_2 <-> palm_2 is filtered on BOTH sides with no audited
+    penetration (convexDecomposition palm_2 pushed the nested thumb root at 52.8 N, probe 09.15)."""
     links = audit.urdf_link_names(gen.OUT_DIR / "openarm_rh56f1_bi_rl.urdf")
-    fingers = ("thumb", "index", "middle", "ring", "pinky")
-    expected = {(f"{s}_hl_{f}_sensor", f"{s}_hl_{f}_tip") for s in ("l", "r") for f in fingers}
-    assert set(audit.filtered_pairs([], links)) == expected
+    assert set(audit.filtered_pairs([], links)) == {("l_hl_palm_2", "l_hl_thumb_2"), ("r_hl_palm_2", "r_hl_thumb_2")}
 
 
 def test_audit_detects_reintroduced_penetration(tmp_path: Path) -> None:

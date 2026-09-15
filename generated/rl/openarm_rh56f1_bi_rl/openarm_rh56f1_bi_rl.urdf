@@ -369,12 +369,6 @@
         <color rgba="0.25 0.25 0.25 1" />
       </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="file:///home/user/rl_ws/urdf/vendor/RH56F1/RH56F1_R/meshes/right_thumb_4.STL" />
-      </geometry>
-    </collision>
   </link>
   <link name="r_hl_thumb_sensor">
     <visual>
@@ -408,12 +402,6 @@
         <color rgba="0.25 0.25 0.25 1" />
       </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="file:///home/user/rl_ws/urdf/vendor/RH56F1/RH56F1_R/meshes/thumb_tip.STL" />
-      </geometry>
-    </collision>
     <inertial>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <mass value="1e-05" />
@@ -457,12 +445,6 @@
         <color rgba="0.25 0.25 0.25 1" />
       </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="file:///home/user/rl_ws/urdf/vendor/RH56F1/RH56F1_R/meshes/right_index_2.STL" />
-      </geometry>
-    </collision>
   </link>
   <link name="r_hl_index_sensor">
     <visual>
@@ -496,12 +478,6 @@
         <color rgba="0.25 0.25 0.25 1" />
       </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="file:///home/user/rl_ws/urdf/vendor/RH56F1/RH56F1_R/meshes/index_tip.STL" />
-      </geometry>
-    </collision>
     <inertial>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <mass value="1e-05" />
@@ -545,12 +521,6 @@
         <color rgba="0.25 0.25 0.25 1" />
       </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="file:///home/user/rl_ws/urdf/vendor/RH56F1/RH56F1_R/meshes/right_middle_2.STL" />
-      </geometry>
-    </collision>
   </link>
   <link name="r_hl_middle_sensor">
     <visual>
@@ -584,12 +554,6 @@
         <color rgba="0.25 0.25 0.25 1" />
       </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="file:///home/user/rl_ws/urdf/vendor/RH56F1/RH56F1_R/meshes/middle_tip.STL" />
-      </geometry>
-    </collision>
     <inertial>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <mass value="1e-05" />
@@ -633,12 +597,6 @@
         <color rgba="0.25 0.25 0.25 1" />
       </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="file:///home/user/rl_ws/urdf/vendor/RH56F1/RH56F1_R/meshes/right_ring_2.STL" />
-      </geometry>
-    </collision>
   </link>
   <link name="r_hl_ring_sensor">
     <visual>
@@ -672,12 +630,6 @@
         <color rgba="0.25 0.25 0.25 1" />
       </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="file:///home/user/rl_ws/urdf/vendor/RH56F1/RH56F1_R/meshes/ring_tip.STL" />
-      </geometry>
-    </collision>
     <inertial>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <mass value="1e-05" />
@@ -721,12 +673,6 @@
         <color rgba="0.25 0.25 0.25 1" />
       </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="file:///home/user/rl_ws/urdf/vendor/RH56F1/RH56F1_R/meshes/right_little_2.STL" />
-      </geometry>
-    </collision>
   </link>
   <link name="r_hl_pinky_sensor">
     <visual>
@@ -760,12 +706,6 @@
         <color rgba="0.25 0.25 0.25 1" />
       </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="file:///home/user/rl_ws/urdf/vendor/RH56F1/RH56F1_R/meshes/little_tip.STL" />
-      </geometry>
-    </collision>
     <inertial>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <mass value="1e-05" />
@@ -1115,12 +1055,6 @@
         <color rgba="0.25 0.25 0.25 1" />
       </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="file:///home/user/rl_ws/urdf/vendor/RH56F1/RH56F1_L/meshes/left_thumb_4.STL" />
-      </geometry>
-    </collision>
   </link>
   <link name="l_hl_thumb_sensor">
     <visual>
@@ -1154,12 +1088,6 @@
         <color rgba="0.25 0.25 0.25 1" />
       </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="file:///home/user/rl_ws/urdf/vendor/RH56F1/RH56F1_L/meshes/thumb_tip.STL" />
-      </geometry>
-    </collision>
     <inertial>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <mass value="1e-05" />
@@ -1203,12 +1131,6 @@
         <color rgba="0.25 0.25 0.25 1" />
       </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="file:///home/user/rl_ws/urdf/vendor/RH56F1/RH56F1_L/meshes/left_index_2.STL" />
-      </geometry>
-    </collision>
   </link>
   <link name="l_hl_index_sensor">
     <visual>
@@ -1242,12 +1164,6 @@
         <color rgba="0.25 0.25 0.25 1" />
       </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="file:///home/user/rl_ws/urdf/vendor/RH56F1/RH56F1_L/meshes/index_tip.STL" />
-      </geometry>
-    </collision>
     <inertial>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <mass value="1e-05" />
@@ -1291,12 +1207,6 @@
         <color rgba="0.25 0.25 0.25 1" />
       </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="file:///home/user/rl_ws/urdf/vendor/RH56F1/RH56F1_L/meshes/left_middle_2.STL" />
-      </geometry>
-    </collision>
   </link>
   <link name="l_hl_middle_sensor">
     <visual>
@@ -1330,12 +1240,6 @@
         <color rgba="0.25 0.25 0.25 1" />
       </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="file:///home/user/rl_ws/urdf/vendor/RH56F1/RH56F1_L/meshes/middle_tip.STL" />
-      </geometry>
-    </collision>
     <inertial>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <mass value="1e-05" />
@@ -1379,12 +1283,6 @@
         <color rgba="0.25 0.25 0.25 1" />
       </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="file:///home/user/rl_ws/urdf/vendor/RH56F1/RH56F1_L/meshes/left_ring_2.STL" />
-      </geometry>
-    </collision>
   </link>
   <link name="l_hl_ring_sensor">
     <visual>
@@ -1418,12 +1316,6 @@
         <color rgba="0.25 0.25 0.25 1" />
       </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="file:///home/user/rl_ws/urdf/vendor/RH56F1/RH56F1_L/meshes/ring_tip.STL" />
-      </geometry>
-    </collision>
     <inertial>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <mass value="1e-05" />
@@ -1467,12 +1359,6 @@
         <color rgba="0.25 0.25 0.25 1" />
       </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="file:///home/user/rl_ws/urdf/vendor/RH56F1/RH56F1_L/meshes/left_little_2.STL" />
-      </geometry>
-    </collision>
   </link>
   <link name="l_hl_pinky_sensor">
     <visual>
@@ -1506,12 +1392,6 @@
         <color rgba="0.25 0.25 0.25 1" />
       </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="file:///home/user/rl_ws/urdf/vendor/RH56F1/RH56F1_L/meshes/little_tip.STL" />
-      </geometry>
-    </collision>
     <inertial>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <mass value="1e-05" />

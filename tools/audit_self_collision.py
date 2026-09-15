@@ -398,8 +398,8 @@ def filtered_pairs(
 
     pairs = {ordered(f.link_a, f.link_b) for f in findings if f.verdict == "WARN"}
     if link_names is not None:
-        # allowlist `force_filter: true`: filter even without an audited penetration (PhysX cooks larger
-        # hulls than the exact hull measured here - see the RH56F1 sensor/tip entries).
+        # allowlist `force_filter: true`: filter even without an audited penetration - PhysX cooks shapes the
+        # exact-hull audit does not model (convexDecomposition pieces, 64-vertex GPU hulls).
         for entry in load_allowlist():
             if not entry.get("force_filter"):
                 continue
@@ -408,8 +408,9 @@ def filtered_pairs(
                 if not fnmatch.fnmatch(link_a, pat_a):
                     continue
                 for link_b in link_names:
-                    if link_a != link_b and fnmatch.fnmatch(link_b, pat_b):
-                        pairs.add(ordered(link_a, link_b))
+                    sides = {name[:2] for name in (link_a, link_b) if name.startswith(("l_", "r_"))}
+                    if link_a != link_b and len(sides) < 2 and fnmatch.fnmatch(link_b, pat_b):
+                        pairs.add(ordered(link_a, link_b))  # `*_` patterns never pair a left link with a right one
         for link_a, link_b in list(pairs):
             mirrored_a, mirrored_b = mirror_link(link_a), mirror_link(link_b)
             if mirrored_a in link_names and mirrored_b in link_names:

@@ -131,15 +131,20 @@ The audit covers zero plus contact-free hand poses in `tools/audit_poses.yaml` (
 fingers closed / thumb open, thumb closed / fingers open, thumb abducted+closed / fingers open,
 followers written explicitly because the audit ignores <mimic>). Thumb vs index/middle with BOTH
 fully closed is real contact (raw 1~6mm) and is deliberately not registered or filtered.
-Two contacts the exact-hull audit cannot see were found with the contact-sensor probe
-(`probe_rh56f1_finger_sweep.py --contacts`, self-collision ON) and are now filtered:
-- sensor pad <-> tip of the same finger: rigid siblings on segment 2 (PhysX skips only parent/child
-  pairs) whose PhysX-cooked hulls touch - standing 117~558 N. The exact hull audit reports no
-  penetration, so `self_collision_allowlist.yaml` marks them `force_filter: true` (filtered regardless).
-- open thumb abducted past ~1.5 rad (arm at zero): thumb_2/3/4/sensor/tip vs the body_link column hull
-  (+2.5~16mm hull, raw 17~47mm clear) pushed the palm 25.6mm; registered as audit pose
-  `thumb_abducted_open_fingers_open` so the pairs become WARN filters.
-Rule: an audit PASS is necessary, not sufficient - PhysX hulls are larger. Verify with the contact probe.
+RH56F1 per-link collider exceptions (2026-09-15, `generate_rl_urdf.py`):
+- `COLLISION_DROP_LINKS`: the vendor STLs of `{f}_2`, `{f}_force_sensor`, `{f}_tip` (thumb: thumb_4 /
+  sensor / tip) are the SAME solid at the same place (identical faces, area, volume, inertia). Three
+  rigid bodies overlapped on one phalanx - standing 117~558 N sensor<->tip contact with self-collision ON
+  and contact split arbitrarily between them. The collider stays only on `_sensor` (the vendor tactile
+  unit, one per finger); `_2` / `_tip` keep mass, visual and frames, and `_sensor` is fixed to `_2`.
+- `DECOMPOSITION_LINKS`: palm_1 / palm_2 are concave shells whose hulls covered the palm_sensor pad face
+  by 1~5 mm (the cup hit the shell before the sensor; a 20 mm cube on the pad now contacts palm_sensor).
+  body_link too: at arm zero the flexed middle finger (raw 46 mm / exact hull 18 mm clear) got 2.25 N and
+  the abducted open thumb pushed the palm 25.6 mm - the PhysX GPU hull of the big column inflates by tens of
+  mm. Rule (user, 09.15): contacts from inflated/fake geometry are fixed in the geometry, never filtered.
+- `force_filter` (allowlist) only for by-design nesting the hull audit cannot see: thumb_2 root in palm_2.
+Rule: an audit PASS is necessary, not sufficient - PhysX hulls are larger. Verify with
+`probe_rh56f1_finger_sweep.py --contacts` (self-collision ON).
 
 Probe caveat: never spawn two articulations of the same instanceable USD with
 different articulation flags in one stage - PhysX aliases their shapes and

@@ -616,3 +616,22 @@ def test_short_flange_adapter_is_present_and_declared_non_vendor() -> None:
     for side in ("r", "l"):
         _, _, z = origin_xyz(joints[f"{side}_hj_mount"])
         assert z == pytest.approx(0.010, abs=1e-9), (side, z)
+
+
+def test_rh56f1_distal_collider_only_on_sensor() -> None:
+    """RH56F1 `{f}_2` / `_force_sensor` / `_tip` share one vendor solid; only `_sensor` keeps the collider
+    (hdgp contact sensors read it). palm_1/palm_2 are the only decomposition links (they covered the pad)."""
+    root = load_urdf("openarm_rh56f1_bi")
+    has_col = {link.get("name"): bool(link.findall("collision")) for link in root.findall("link")}
+    for side in ("r", "l"):
+        for finger in ("thumb", "index", "middle", "ring", "pinky"):
+            assert has_col[f"{side}_hl_{finger}_sensor"], finger
+            assert not has_col[f"{side}_hl_{finger}_tip"], finger
+        assert not has_col[f"{side}_hl_thumb_4"]
+        assert not any(has_col[f"{side}_hl_{f}_2"] for f in ("index", "middle", "ring", "pinky"))
+        assert has_col[f"{side}_hl_palm_sensor"] and has_col[f"{side}_hl_thumb_3"]
+    policy = load_manifest("openarm_rh56f1_bi")["collision_approximation"]
+    assert policy["default"] == "convex_hull"
+    assert sorted(policy["convex_decomposition_links"]) == sorted(
+        ["body_link", *(f"{s}_hl_{p}" for s in ("r", "l") for p in ("palm_1", "palm_2"))])
+    assert "body_link" not in policy["convex_hull_links"]
