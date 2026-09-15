@@ -4,12 +4,12 @@
 Replaces the manual Isaac Sim GUI import. The import settings are pinned in
 code so they can never drift from what the asset pipeline assumes:
 
-- colliders (2026-09-05 policy, recorded per asset in the manifest's
-  `collision_approximation` block by tools/generate_rl_urdf.py): dexterous hand
-  links (DG-5F / DG-5F-S / RH56F1) are imported as convexDecomposition - a
-  plain hull fills concave pockets (the palm's thumb pocket) and fabricates
-  resting penetrations; OpenArm-made links (body, arms, head, stock gripper)
-  are then overridden to convexHull. ⚠ PhysX GPU hulls are capped at 64
+- colliders (recorded per asset in the manifest's `collision_approximation`
+  block by tools/generate_rl_urdf.py): since 2026-09-09 the default is
+  convexHull everywhere (the vendor's own Isaac config); RH56F1 returned to hull
+  on 2026-09-15. Assets listed in generate_rl_urdf.COLLIDER_DEVIATIONS (stock
+  gripper) import as convexDecomposition with OpenArm-made links overridden to
+  convexHull. ⚠ PhysX GPU hulls are capped at 64
   vertices and inflate past the exact hull (measured 2026-08: ghost contacts
   across a 9.6 mm arm gap with self-collision ON), which is why the audit's
   hull-only WARN pairs are all authored as PhysX collision filters.
@@ -139,7 +139,12 @@ DRIVE_DAMPING = 1.0
 # not integrator instability - the same report measured that shrinking the
 # physics dt 8x (omega*dt 4.2 -> 0.52) did NOT stop the divergence. 500 tracks
 # 6x tighter and is worth re-testing once the widened limits are in.
-MIMIC_NATURAL_FREQUENCY = 200.0
+# ★2026-09-15 raised to 500 (the value this comment already flagged for re-test once the widened
+# limits were in). hdgp scripts/reinforcement_learning/probes/probe_rh56f1_finger_sweep.py, RH56F1 alone,
+# gravity on, self-collision off, r_hj_index_1 swept 0->1.2->0 rad at the vendor max speed (1.5 rad/s):
+#     nf 200: follower error 0.068 rad, other hand joints max 3.3 mrad
+#     nf 500: follower error 0.012-0.014 rad, other hand joints max 0.9-2.1 mrad (no instability)
+MIMIC_NATURAL_FREQUENCY = 500.0
 MIMIC_DAMPING_RATIO = 1.0
 
 # How far contact may push a DRIVEN joint past its own limit. The dependent
@@ -230,6 +235,23 @@ GRIPPER_DRIVER_GAINS = FixedGains(
 )
 
 
+# RH56F1 hand drive (2026-09-15). The vendor stack has NO PD gains (RS-485 position servo: angleSet /
+# speedSet / forceSet registers), so these are sim-chosen from the vendor SPEED spec and the URDF effort
+# limit (1 N*m), not lifted from a config. Measured with hdgp probe_rh56f1_finger_sweep.py (self-collision
+# off, mimic nf 500, r_hj_index_1 at the vendor max speed "speed 2000 = full range in 1000 ms" = 1.5 rad/s):
+#     fallback 100/1   torque saturated (1.0), others shake 0.34 rad/s, a pure torque source under contact
+#     5/2 (hdgp)       tracking lag 0.51 rad - cannot follow the vendor speed
+#     30/1.5           lag 0.070 rad (kd/kp 0.05 lag = rate*kd/kp)
+#     30/0.3           lag 0.010 rad, saturation 0.46, other hand joints max 1.4 mrad   <- chosen
+# thumb_1 still saturates at the 1 N*m URDF effort when swept 2 rad in 1 s (lag 0.10 rad) - vendor limit.
+RH56F1_HAND_DRIVE_GAINS = FixedGains(
+    joints=tuple(f"{s}_hj_{j}" for s in ("r", "l")
+                 for j in ("thumb_1", "thumb_2", "index_1", "middle_1", "ring_1", "pinky_1")),
+    stiffness=30.0, damping=0.3,
+    origin="sim-chosen 2026-09-15 from vendor speed spec (no vendor PD), probe_rh56f1_finger_sweep.py",
+)
+
+
 @dataclass(frozen=True)
 class AssetBuild:
     """Per-asset build settings that cannot be derived from the URDF alone.
@@ -288,7 +310,7 @@ ASSET_BUILDS: dict[str, AssetBuild] = {
         hand_drive="direct", gain_sources=(ARM_DRIVER_GAINS, DG5F_DRIVER_GAINS)),
     # RH56F1: 12 physical hand DOF, 6 driven -> PhysX mimic joints.
     "openarm_rh56f1_bi_rl": AssetBuild(
-        hand_drive="mimic", gain_sources=(ARM_DRIVER_GAINS,)),
+        hand_drive="mimic", gain_sources=(ARM_DRIVER_GAINS, RH56F1_HAND_DRIVE_GAINS)),
     # Stock gripper: one motor drives both jaws (URDF finger_joint2 mimics
     # finger_joint1) -> PhysX mimic; only *_hj_gripper_1 is commandable.
     "openarm_gripper_bi_rl": AssetBuild(

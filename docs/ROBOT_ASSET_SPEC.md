@@ -78,8 +78,9 @@ COLLIDER_DEVIATIONS = { "<asset>": ("convex_decomposition", "<사유 — 빈 문
 조각 경계의 깊은 관통이 큰 depenetration 임펄스를 만들고, 그게 관절 한계 구속을 뚫었다.
 
 **예외를 등록할 때는 사유를 반드시 적는다.** 현재 예외 둘:
-- `openarm_rh56f1_bi` — `self_collision_allowlist.yaml` 의 `accept_raw` 항목들이
-  decomposition 임포트를 전제로 수용된 것이다. hull 로 바꾸려면 그 전제부터 재측정.
+- ~~`openarm_rh56f1_bi`~~ — **2026-09-15 hull 로 복귀**(사용자 결정). 손가락 primitive·palm_1 collision 제거를
+  없애고 벤더 STL hull + 손 자세 감사(`audit_poses.yaml`) + 필터로 자기충돌 ON 을 만족시킨다. 이전 사유:
+  `openarm_rh56f1_bi` — `self_collision_allowlist.yaml` 의 `accept_raw` 항목들이   decomposition 임포트를 전제로 수용된 것이다. hull 로 바꾸려면 그 전제부터 재측정.
 - `openarm_gripper_bi` — 그리퍼 조는 **파지 도구**라 hull 이면 개구(84.5 mm 실측)와
   파지 대역(10~85 mm)이 무효가 된다. 09.09 미검증이라 보류.
 

@@ -99,10 +99,10 @@ and the enclosed `*_hl_adapter` plate has visual-only geometry.
 `tools/audit_self_collision.py` enforces this permanently: it reproduces the
 PhysX pairing rule (non-adjacent pairs only) at zero pose AND at every
 task-home pose registered in `tools/audit_poses.yaml`, and FAILs the
-generator on any raw-mesh penetration; hull-only findings (safe with
-convexDecomposition import) WARN, documented in
-`tools/self_collision_allowlist.yaml`. The manifest records the requirement
-as `requires_collision_approximation: convex_decomposition`.
+generator on any raw-mesh penetration; hull-only findings WARN, documented in
+`tools/self_collision_allowlist.yaml`, and every WARN pair is collision-filtered
+in the built USD (below). Since 2026-09-09 every asset defaults to convex hulls
+(vendor Isaac config); the old `requires_collision_approximation` premise is gone.
 
 Filtered pairs: the audit exports ALL its WARN pairs (every place a convex
 approximation differs from the raw geometry - hull artifacts, cooking
@@ -120,13 +120,17 @@ Everything else keeps full self-collision. Zero-action probes (`tools/probe_zero
 robot per process) confirm all four assets hold <1e-5 rad drift over 200
 steps with `enabled_self_collisions=True` at zero pose.
 
-RH56F1 note: its vendor collision meshes were unrepairably non-watertight, so
-the generator replaces the finger-chain collisions with fitted primitives
-(inscribed cylinders / AABB boxes; the palm_1 cover's collision is dropped -
-palm_2/3 envelop it). The nested-shell finger design GENUINELY overlaps at
-rest (pads wrap across the knuckles, 0.7~9.4mm); those pairs are `accept_raw`
-allowlisted and collision-filtered in the built USD, so even RH56F1 is
-self-collision safe as built.
+RH56F1 note (2026-09-15, user decision "전체 convex hull, 자기충돌 ON 에서도 링크 간 충돌 없음"):
+the fitted-primitive finger colliders and the dropped palm_1 collision are gone - every RH56F1
+link now uses its vendor STL as a convex hull, like openarm_dg5f-m-short_bi_rl. The primitives
+had nested sensor pads overlapping segment 2 along its whole length and unfiltered neighbour-
+finger overlaps; with self-collision ON a single index sweep shook the other hand joints up to
+21 mrad / 3.9 rad/s (hdgp probe_rh56f1_finger_sweep.py). Ten vendor finger/pad meshes stay
+non-watertight after repair, so their pairs are allowlisted (unverified) rather than raw-measured.
+The audit covers zero plus contact-free hand poses in `tools/audit_poses.yaml` (half-closed,
+fingers closed / thumb open, thumb closed / fingers open, thumb abducted+closed / fingers open,
+followers written explicitly because the audit ignores <mimic>). Thumb vs index/middle with BOTH
+fully closed is real contact (raw 1~6mm) and is deliberately not registered or filtered.
 
 Probe caveat: never spawn two articulations of the same instanceable USD with
 different articulation flags in one stage - PhysX aliases their shapes and

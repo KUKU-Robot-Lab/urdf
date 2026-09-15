@@ -338,7 +338,7 @@ def audit_urdf(urdf_path: Path, pose: dict[str, float] | None = None) -> list[Fi
                                             "raw meshes interpenetrate at rest"))
             else:
                 reason = (entry.get("reason", "allowlisted") if entry is not None
-                          else "hull-only; safe with convex_decomposition import")
+                          else "hull-only; raw clear - collision-filtered in the built USD")
                 findings.append(Finding(link_a, link_b, hull_depth, raw_depth, "WARN", reason))
     return findings
 

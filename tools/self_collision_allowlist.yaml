@@ -1,11 +1,17 @@
-# Known hull-only self-collision findings (raw meshes are clear).
+# Known self-collision findings that are NOT asset defects.
 #
-# These pairs penetrate ONLY under a plain convex-hull collision approximation,
-# which fills concave pockets. They are safe when the USD is imported with
-# collider_type "convex_decomposition" (tools/build_usd.py enforces this).
+# Hull-only pairs penetrate only under the convex-hull collision approximation
+# (it fills concave pockets / rounds nested shells); raw meshes are clear or,
+# for non-watertight vendor meshes, cannot be measured. Every WARN pair is
+# exported to the manifest `self_collision_filtered_pairs` and authored as a
+# PhysX collision filter by tools/build_usd.py, so self-collision can stay ON.
+# ★2026-09-15: every asset incl. RH56F1 is built with convex hulls (vendor
+#   default, generate_rl_urdf.DEFAULT_COLLIDER); the old
+#   "requires convexDecomposition" premise no longer holds.
 # Any pair NOT listed here fails the audit -> fix the asset, don't extend the
-# list casually.
-requires_collision_approximation: convexDecomposition
+# list casually. Never allowlist a pair whose raw meshes genuinely collide in a
+# reachable pose (e.g. RH56F1 thumb vs fingers with the hand fully closed) -
+# that is real contact and must keep colliding.
 pairs:
   - links: ["*_hl_palm", "*_hl_thumb_2"]
     reason: >-
@@ -49,3 +55,9 @@ pairs:
   - links: ["*_hl_palm_2", "*_hl_thumb_2"]
     accept_raw: true
     reason: RH56F1 thumb root nests into the palm shell by design.
+  - links: ["*_hl_palm_1", "*_hl_[imrp]*_1"]
+    reason: >-
+      RH56F1 palm_1 back cover wraps the four finger roots (hinged inside it);
+      the right cover is watertight and measures raw -0.0~+0.1mm, the left
+      cover mesh is non-watertight so the pair cannot be disproven (2026-09-15
+      all-hull rebuild).

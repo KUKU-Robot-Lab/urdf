@@ -35,3 +35,112 @@ openarm_gripper_bi_rl:
     l_aj_3: 1.4065
     l_aj_6: -0.6695
     l_aj_7: 1.3563
+
+# ★2026-09-15 RH56F1 all-convex-hull rebuild (user decision): self-collision ON must not create
+# link-link contacts while the fingers move, so the audit covers hand poses that must be contact-free.
+# NOT registered: thumb fully abducted+flexed WITH fingers fully closed - raw meshes of thumb vs
+# index/middle collide 1~6mm there (real finger-thumb contact, the real hand stops on force), and a
+# registered pose would turn that genuine contact into a collision filter.
+# The audit does NOT apply <mimic>: followers are written explicitly (multiplier x leader,
+# index/middle/ring/pinky_2 = 1.1169 x _1, thumb_3 = 1.1425 x thumb_2, thumb_4 = 0.7508 x thumb_3).
+openarm_rh56f1_bi_rl:
+  hand_half:
+    r_hj_index_1: 0.76428
+    r_hj_index_2: 0.85362
+    r_hj_middle_1: 0.76428
+    r_hj_middle_2: 0.85362
+    r_hj_ring_1: 0.76428
+    r_hj_ring_2: 0.85362
+    r_hj_pinky_1: 0.76428
+    r_hj_pinky_2: 0.85362
+    r_hj_thumb_1: 1.0472
+    r_hj_thumb_2: 0.23728
+    r_hj_thumb_3: 0.27109
+    r_hj_thumb_4: 0.20354
+    l_hj_index_1: 0.76428
+    l_hj_index_2: 0.85362
+    l_hj_middle_1: 0.76428
+    l_hj_middle_2: 0.85362
+    l_hj_ring_1: 0.76428
+    l_hj_ring_2: 0.85362
+    l_hj_pinky_1: 0.76428
+    l_hj_pinky_2: 0.85362
+    l_hj_thumb_1: 1.0472
+    l_hj_thumb_2: 0.23728
+    l_hj_thumb_3: 0.27109
+    l_hj_thumb_4: 0.20354
+  fingers_closed_thumb_open:
+    r_hj_index_1: 1.52856
+    r_hj_index_2: 1.70725
+    r_hj_middle_1: 1.52856
+    r_hj_middle_2: 1.70725
+    r_hj_ring_1: 1.52856
+    r_hj_ring_2: 1.70725
+    r_hj_pinky_1: 1.52856
+    r_hj_pinky_2: 1.70725
+    r_hj_thumb_1: 0.0
+    r_hj_thumb_2: 0.0
+    r_hj_thumb_3: 0.0
+    r_hj_thumb_4: 0.0
+    l_hj_index_1: 1.52856
+    l_hj_index_2: 1.70725
+    l_hj_middle_1: 1.52856
+    l_hj_middle_2: 1.70725
+    l_hj_ring_1: 1.52856
+    l_hj_ring_2: 1.70725
+    l_hj_pinky_1: 1.52856
+    l_hj_pinky_2: 1.70725
+    l_hj_thumb_1: 0.0
+    l_hj_thumb_2: 0.0
+    l_hj_thumb_3: 0.0
+    l_hj_thumb_4: 0.0
+  thumb_closed_fingers_open:
+    r_hj_index_1: 0.0
+    r_hj_index_2: 0.0
+    r_hj_middle_1: 0.0
+    r_hj_middle_2: 0.0
+    r_hj_ring_1: 0.0
+    r_hj_ring_2: 0.0
+    r_hj_pinky_1: 0.0
+    r_hj_pinky_2: 0.0
+    r_hj_thumb_1: 0.0
+    r_hj_thumb_2: 0.47456
+    r_hj_thumb_3: 0.54218
+    r_hj_thumb_4: 0.40707
+    l_hj_index_1: 0.0
+    l_hj_index_2: 0.0
+    l_hj_middle_1: 0.0
+    l_hj_middle_2: 0.0
+    l_hj_ring_1: 0.0
+    l_hj_ring_2: 0.0
+    l_hj_pinky_1: 0.0
+    l_hj_pinky_2: 0.0
+    l_hj_thumb_1: 0.0
+    l_hj_thumb_2: 0.47456
+    l_hj_thumb_3: 0.54218
+    l_hj_thumb_4: 0.40707
+  thumb_abducted_closed_fingers_open:
+    r_hj_index_1: 0.0
+    r_hj_index_2: 0.0
+    r_hj_middle_1: 0.0
+    r_hj_middle_2: 0.0
+    r_hj_ring_1: 0.0
+    r_hj_ring_2: 0.0
+    r_hj_pinky_1: 0.0
+    r_hj_pinky_2: 0.0
+    r_hj_thumb_1: 2.0944
+    r_hj_thumb_2: 0.47456
+    r_hj_thumb_3: 0.54218
+    r_hj_thumb_4: 0.40707
+    l_hj_index_1: 0.0
+    l_hj_index_2: 0.0
+    l_hj_middle_1: 0.0
+    l_hj_middle_2: 0.0
+    l_hj_ring_1: 0.0
+    l_hj_ring_2: 0.0
+    l_hj_pinky_1: 0.0
+    l_hj_pinky_2: 0.0
+    l_hj_thumb_1: 2.0944
+    l_hj_thumb_2: 0.47456
+    l_hj_thumb_3: 0.54218
+    l_hj_thumb_4: 0.40707
