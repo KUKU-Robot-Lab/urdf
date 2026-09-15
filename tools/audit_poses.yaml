@@ -144,3 +144,31 @@ openarm_rh56f1_bi_rl:
     l_hj_thumb_2: 0.47456
     l_hj_thumb_3: 0.54218
     l_hj_thumb_4: 0.40707
+  # 2026-09-15 probe: an OPEN thumb swept to thumb_1=2.09 rad (arm at zero) pushed the palm 25.6mm with
+  # self-collision ON (0.9mm OFF). Audit: thumb_2/3/4/sensor/tip vs body_link hull +2.5~16mm while raw is
+  # 17~47mm clear - the torso column hull, not real contact.
+  thumb_abducted_open_fingers_open:
+    r_hj_index_1: 0.0
+    r_hj_index_2: 0.0
+    r_hj_middle_1: 0.0
+    r_hj_middle_2: 0.0
+    r_hj_ring_1: 0.0
+    r_hj_ring_2: 0.0
+    r_hj_pinky_1: 0.0
+    r_hj_pinky_2: 0.0
+    r_hj_thumb_1: 2.0944
+    r_hj_thumb_2: 0.0
+    r_hj_thumb_3: 0.0
+    r_hj_thumb_4: 0.0
+    l_hj_index_1: 0.0
+    l_hj_index_2: 0.0
+    l_hj_middle_1: 0.0
+    l_hj_middle_2: 0.0
+    l_hj_ring_1: 0.0
+    l_hj_ring_2: 0.0
+    l_hj_pinky_1: 0.0
+    l_hj_pinky_2: 0.0
+    l_hj_thumb_1: 2.0944
+    l_hj_thumb_2: 0.0
+    l_hj_thumb_3: 0.0
+    l_hj_thumb_4: 0.0

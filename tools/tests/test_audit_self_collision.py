@@ -74,6 +74,16 @@ def test_filtered_pairs_mirror_requires_existing_links() -> None:
     assert audit.filtered_pairs([finding], links) == [("body_link", "l_hl_gripper_base")]
 
 
+def test_force_filter_pairs_added_without_findings() -> None:
+    """allowlist `force_filter`: RH56F1 sensor pad<->tip of the same finger is filtered on BOTH sides
+    with no audited penetration (PhysX-cooked hulls touch: 117~558 N standing contact, probe 09.15),
+    and never across fingers."""
+    links = audit.urdf_link_names(gen.OUT_DIR / "openarm_rh56f1_bi_rl.urdf")
+    fingers = ("thumb", "index", "middle", "ring", "pinky")
+    expected = {(f"{s}_hl_{f}_sensor", f"{s}_hl_{f}_tip") for s in ("l", "r") for f in fingers}
+    assert set(audit.filtered_pairs([], links)) == expected
+
+
 def test_audit_detects_reintroduced_penetration(tmp_path: Path) -> None:
     """Regression guard: un-fixing the mount stack must FAIL the audit.
 

@@ -131,6 +131,15 @@ The audit covers zero plus contact-free hand poses in `tools/audit_poses.yaml` (
 fingers closed / thumb open, thumb closed / fingers open, thumb abducted+closed / fingers open,
 followers written explicitly because the audit ignores <mimic>). Thumb vs index/middle with BOTH
 fully closed is real contact (raw 1~6mm) and is deliberately not registered or filtered.
+Two contacts the exact-hull audit cannot see were found with the contact-sensor probe
+(`probe_rh56f1_finger_sweep.py --contacts`, self-collision ON) and are now filtered:
+- sensor pad <-> tip of the same finger: rigid siblings on segment 2 (PhysX skips only parent/child
+  pairs) whose PhysX-cooked hulls touch - standing 117~558 N. The exact hull audit reports no
+  penetration, so `self_collision_allowlist.yaml` marks them `force_filter: true` (filtered regardless).
+- open thumb abducted past ~1.5 rad (arm at zero): thumb_2/3/4/sensor/tip vs the body_link column hull
+  (+2.5~16mm hull, raw 17~47mm clear) pushed the palm 25.6mm; registered as audit pose
+  `thumb_abducted_open_fingers_open` so the pairs become WARN filters.
+Rule: an audit PASS is necessary, not sufficient - PhysX hulls are larger. Verify with the contact probe.
 
 Probe caveat: never spawn two articulations of the same instanceable USD with
 different articulation flags in one stage - PhysX aliases their shapes and
