@@ -22,6 +22,8 @@ EXPECTED_CSPACE = {
     "openarm_dg5f-m_bi_left": 27,
     "openarm_dg5f-m-short_bi_right": 27,
     "openarm_dg5f-m-short_bi_left": 27,
+    "openarm_dg5f-m-short-tl_bi_right": 26,
+    "openarm_dg5f-m-short-tl_bi_left": 26,
     "openarm_dg5f-s_bi_right": 27,
     "openarm_dg5f-s_bi_left": 27,
     "openarm_gripper_bi_right": 7,
@@ -117,3 +119,13 @@ def test_directory_equals_filename_convention(outputs):
     for name, path in outputs.items():
         assert path.parent.name == name and path.name == f"{name}.urdf"
         assert (gen.HDGP_FABRIC_DIR / name).is_dir(), "hdgp consumer dir missing"
+
+
+# ★09.21 thumb_1 용접 변종(-tl): RL URDF 에서 fixed 인 손 관절은 fabric URDF 에서도 fixed 여야
+#   cspace 가 26 으로 맞는다(프로필 fabric_joint_order 26). revolute 로 남으면 pour_fabric 부팅이 죽는다.
+@pytest.mark.parametrize("name", ["openarm_dg5f-m-short-tl_bi_right", "openarm_dg5f-m-short-tl_bi_left"])
+def test_tl_thumb_abduction_is_fixed(outputs, name):
+    joints = gen.parse_urdf(outputs[name])
+    assert joints["rj_dg_1_1"]["type"] == "fixed"
+    assert all(j["type"] == "revolute" for n, j in joints.items()
+               if n.startswith("rj_dg_") and n != "rj_dg_1_1")

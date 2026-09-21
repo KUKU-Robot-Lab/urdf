@@ -265,12 +265,29 @@ def patch_arm(joints: dict[str, ET.Element], rl: dict[str, dict], side: str) -> 
         set_axis_limits(target, source["axis"], source["limits"])
 
 
+def weld_joint(joint: ET.Element) -> None:
+    """Make a template joint fixed (thumb_1 welded variants) - drops it from the cspace.
+
+    ★2026-09-21: the -tl assets weld `*_hj_thumb_1` in the RL URDF (contact pushed it out of
+    its limits and the vendor 7.5 N.m drive saturates 27x). A fabric URDF that keeps the joint
+    revolute would have cspace 27 while the RL profile lists 26 joints, and the task dies at boot.
+    """
+    joint.set("type", "fixed")
+    for tag in ("axis", "limit"):
+        element = joint.find(tag)
+        if element is not None:
+            joint.remove(element)
+
+
 def patch_hand(joints: dict[str, ET.Element], rl: dict[str, dict], side: str) -> None:
     for index, finger in enumerate(FINGERS, start=1):
         for segment in range(1, 5):
             source = rl[f"{side}_hj_{finger}_{segment}"]
             target = joints[f"rj_dg_{index}_{segment}"]
             set_origin(target, source["xyz"], source["rpy"])
+            if source["type"] == "fixed":
+                weld_joint(target)
+                continue
             set_axis_limits(target, source["axis"], source["limits"])
         tip = rl[f"{side}_hj_{finger}_tip"]
         set_origin(joints[f"rl_dg_{index}_tip_joint"], tip["xyz"], tip["rpy"])
@@ -359,11 +376,15 @@ def _fk_compare(fabric: dict, rl: dict, joint_map: dict[str, str],
     return worst
 
 
-def tesollo_joint_map(side: str) -> dict[str, str]:
+def tesollo_joint_map(side: str, rl: dict[str, dict] | None = None) -> dict[str, str]:
+    """fabric joint -> RL joint. Welded RL joints are skipped: they have no limits to sample."""
     mapping = {f"openarm_right_joint{i}": f"{side}_aj_{i}" for i in range(1, 8)}
     for index, finger in enumerate(FINGERS, start=1):
         for segment in range(1, 5):
-            mapping[f"rj_dg_{index}_{segment}"] = f"{side}_hj_{finger}_{segment}"
+            rl_name = f"{side}_hj_{finger}_{segment}"
+            if rl is not None and rl[rl_name]["type"] == "fixed":
+                continue
+            mapping[f"rj_dg_{index}_{segment}"] = rl_name
     return mapping
 
 
@@ -374,7 +395,7 @@ def verify_tesollo(urdf_path: Path, rl: dict, side: str) -> float:
     frame_pairs = [("palm_link", f"{side}_hl_palm")]
     frame_pairs += [(f"rl_dg_{i}_tip", f"{side}_hl_{finger}_tip")
                     for i, finger in enumerate(FINGERS, start=1)]
-    return _fk_compare(parse_urdf(urdf_path), rl, tesollo_joint_map(side), frame_pairs, seed=7)
+    return _fk_compare(parse_urdf(urdf_path), rl, tesollo_joint_map(side, rl), frame_pairs, seed=7)
 
 
 def verify_gripper(urdf_path: Path, rl: dict, side: str) -> float:
@@ -586,6 +607,14 @@ VARIANTS = {
     "openarm_dg5f-m-short_bi_left": lambda: build_tesollo(
         "openarm_dg5f-m-short_bi_left", "openarm_dg5f_left",
         "openarm_dg5f-m-short_bi_rl", "l"),
+    # ★09.21 thumb_1 용접 변종. 손 체인은 short 와 같고 thumb_1 만 fixed 라 같은 템플릿을 쓴다
+    #   (patch_hand 가 RL 의 fixed 를 그대로 옮겨 cspace 26 이 된다). FK 게이트가 재사용을 증명한다.
+    "openarm_dg5f-m-short-tl_bi_right": lambda: build_tesollo(
+        "openarm_dg5f-m-short-tl_bi_right", "openarm_tesollo_sensor_right",
+        "openarm_dg5f-m-short-tl_bi_rl", "r"),
+    "openarm_dg5f-m-short-tl_bi_left": lambda: build_tesollo(
+        "openarm_dg5f-m-short-tl_bi_left", "openarm_dg5f_left",
+        "openarm_dg5f-m-short-tl_bi_rl", "l"),
     "openarm_dg5f-s_bi_right": lambda: build_tesollo(
         "openarm_dg5f-s_bi_right", "openarm_tesollo_bi_s", "openarm_dg5f-s_bi_rl", "r"),
     "openarm_dg5f-s_bi_left": lambda: build_tesollo(
