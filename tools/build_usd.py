@@ -146,6 +146,14 @@ DRIVE_DAMPING = 1.0
 #     nf 500: follower error 0.012-0.014 rad, other hand joints max 0.9-2.1 mrad (no instability)
 MIMIC_NATURAL_FREQUENCY = 500.0
 MIMIC_DAMPING_RATIO = 1.0
+# ★2026-10-17 RH56F1 = 0 (hard constraint; PhysX schema: naturalFrequency <= 0 makes the mimic
+# joint a hard constraint). The 500 spring is fine without contact (0.012 rad above) but under a
+# grasp the light distal phalanx gives way: hdgp rh_aglt rg3wn trace 1.33 rad, and replaying real
+# RH56F1 bags (hdgp scripts/tools/s2rsim, 3 bags x 32 env) at nf 500 the follower error was
+# 0.04-0.46 rad and the right hand lifted the cup 0.5-1.2 cm vs 7 cm on the real hand. nf 0 with
+# substep 4: follower error 0.006 rad, lift 4-4.4 cm (left 11 vs real 12.9). The real hand is a
+# rigid linkage, and most public Inspire models (MuJoCo equality) couple it rigidly too.
+# Per asset (AssetBuild.mimic_natural_frequency) so the stock gripper keeps 500.
 
 # How far contact may push a DRIVEN joint past its own limit. The dependent
 # joint's limit is widened to cover the mimic demand over that whole excursion.
@@ -281,6 +289,7 @@ class AssetBuild:
 
     hand_drive: str
     gain_sources: tuple[GainSource | FixedGains, ...]
+    mimic_natural_frequency: float = MIMIC_NATURAL_FREQUENCY
 
 
 # ★Every asset must be listed - an unlisted asset is a build error, not a
@@ -310,7 +319,8 @@ ASSET_BUILDS: dict[str, AssetBuild] = {
         hand_drive="direct", gain_sources=(ARM_DRIVER_GAINS, DG5F_DRIVER_GAINS)),
     # RH56F1: 12 physical hand DOF, 6 driven -> PhysX mimic joints.
     "openarm_rh56f1_bi_rl": AssetBuild(
-        hand_drive="mimic", gain_sources=(ARM_DRIVER_GAINS, RH56F1_HAND_DRIVE_GAINS)),
+        hand_drive="mimic", gain_sources=(ARM_DRIVER_GAINS, RH56F1_HAND_DRIVE_GAINS),
+        mimic_natural_frequency=0.0),
     # Stock gripper: one motor drives both jaws (URDF finger_joint2 mimics
     # finger_joint1) -> PhysX mimic; only *_hj_gripper_1 is commandable.
     "openarm_gripper_bi_rl": AssetBuild(
@@ -697,7 +707,7 @@ def widen_dependent_limit(prim, leader_prim, multiplier: float, touched_layers: 
 
 
 def patch_one_mimic_joint(prim, leader_prim, name: str, leader: str, multiplier: float,
-                          touched_layers: set) -> list[str]:
+                          touched_layers: set, natural_frequency: float) -> list[str]:
     """Stiffen one mimic joint and return what is wrong with it, if anything."""
     if prim is None:
         return [f"{name}: absent from USD"]
@@ -716,7 +726,7 @@ def patch_one_mimic_joint(prim, leader_prim, name: str, leader: str, multiplier:
     if gearing is None or abs(gearing + multiplier) > 1e-4:
         problems.append(f"{name}: gearing {gearing} != -{multiplier}")
 
-    for suffix, value in (("naturalFrequency", MIMIC_NATURAL_FREQUENCY),
+    for suffix, value in (("naturalFrequency", natural_frequency),
                           ("dampingRatio", MIMIC_DAMPING_RATIO)):
         attr = prim.GetAttribute(f"{prefix}:{suffix}")
         if not attr:
@@ -767,7 +777,8 @@ def patch_and_verify_mimic_joints(usd_path: Path, asset: str, urdf_path: Path) -
     leaders = {leader for leader, _ in mimics.values()}
     for name, (leader, multiplier) in sorted(mimics.items(), key=lambda kv: (kv[0] not in leaders, kv[0])):
         problems.extend(patch_one_mimic_joint(
-            joints.get(name), joints.get(leader), name, leader, multiplier, touched_layers))
+            joints.get(name), joints.get(leader), name, leader, multiplier, touched_layers,
+            ASSET_BUILDS[asset].mimic_natural_frequency))
 
     for layer in touched_layers:
         layer.Save()
@@ -778,7 +789,7 @@ def patch_and_verify_mimic_joints(usd_path: Path, asset: str, urdf_path: Path) -
             + "; ".join(problems[:6]) + (" ..." if len(problems) > 6 else "")
         )
     print(f"[{asset}] mimic contract ok: {len(mimics)} PhysX mimic joints "
-          f"(naturalFrequency={MIMIC_NATURAL_FREQUENCY}, dampingRatio={MIMIC_DAMPING_RATIO})")
+          f"(naturalFrequency={ASSET_BUILDS[asset].mimic_natural_frequency}, dampingRatio={MIMIC_DAMPING_RATIO})")
 
 
 def merged_body_resolver(urdf_path: Path, bodies: set[str]):
