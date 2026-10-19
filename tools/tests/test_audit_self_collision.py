@@ -81,6 +81,17 @@ def test_force_filter_pairs_added_without_findings() -> None:
     assert set(audit.filtered_pairs([], links)) == {("l_hl_palm_2", "l_hl_thumb_2"), ("r_hl_palm_2", "r_hl_thumb_2")}
 
 
+def test_keep_collision_pairs_never_filtered() -> None:
+    """allowlist `keep_collision`: a WARN on a real CAD contact (RH56F1 v2 thumb pad <-> index_1 at full
+    thumb flexion) stays a collision - neither the pair nor its mirror is filtered."""
+    finding = audit.Finding("r_hl_index_1", "r_hl_thumb_sensor", 0.0012, None, "WARN", "test")
+    other = audit.Finding("r_hl_palm_3", "r_hl_ring_1", 0.0032, -0.0008, "WARN", "test")
+    links = {"r_hl_index_1", "r_hl_thumb_sensor", "l_hl_index_1", "l_hl_thumb_sensor",
+             "r_hl_palm_3", "r_hl_ring_1", "l_hl_palm_3", "l_hl_ring_1"}
+    assert audit.filtered_pairs([finding, other], links) == [("l_hl_palm_3", "l_hl_ring_1"),
+                                                             ("r_hl_palm_3", "r_hl_ring_1")]
+
+
 def test_audit_detects_reintroduced_penetration(tmp_path: Path) -> None:
     """Regression guard: un-fixing the mount stack must FAIL the audit.
 

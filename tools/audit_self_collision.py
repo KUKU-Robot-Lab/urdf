@@ -396,11 +396,18 @@ def filtered_pairs(
     def ordered(a: str, b: str) -> tuple[str, str]:
         return (a, b) if a <= b else (b, a)
 
-    pairs = {ordered(f.link_a, f.link_b) for f in findings if f.verdict == "WARN"}
+    allowlist = load_allowlist()
+
+    def kept(finding: Finding) -> bool:
+        # allowlist `keep_collision`: a measured real CAD contact (not a hull artifact) stays a collision
+        entry = allowlisted_entry(finding.link_a, finding.link_b, allowlist)
+        return bool(entry and entry.get("keep_collision"))
+
+    pairs = {ordered(f.link_a, f.link_b) for f in findings if f.verdict == "WARN" and not kept(f)}
     if link_names is not None:
         # allowlist `force_filter: true`: filter even without an audited penetration - PhysX cooks shapes the
         # exact-hull audit does not model (convexDecomposition pieces, 64-vertex GPU hulls).
-        for entry in load_allowlist():
+        for entry in allowlist:
             if not entry.get("force_filter"):
                 continue
             pat_a, pat_b = entry["links"]

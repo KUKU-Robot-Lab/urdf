@@ -13,6 +13,9 @@ code so they can never drift from what the asset pipeline assumes:
   vertices and inflate past the exact hull (measured 2026-08: ghost contacts
   across a 9.6 mm arm gap with self-collision ON), which is why the audit's
   hull-only WARN pairs are all authored as PhysX collision filters.
+  Since 2026-10-19 the collider APIs sit on the Mesh gprims, not on the
+  importer's Xform (`move_colliders_to_meshes`), so Newton's UsdPhysics parser
+  sees them too.
 - merge_fixed_joints False: the historical GUI imports did NOT merge. Measured
   on the previous openarm_tesollo_bi_s_rl USD: 77 rigid bodies including every
   `*_hl_palm` and `*_tip`. Merging drops 20 bodies, and hdgp addresses them by
@@ -457,6 +460,8 @@ def convert(asset: str) -> Path:
         override_link_approximation(usd_path, asset, hull_links, "convexHull")
     if decomp_links:
         override_link_approximation(usd_path, asset, decomp_links, "convexDecomposition", decomp_params)
+    move_colliders_to_meshes(usd_path, asset)
+    verify_colliders_on_gprims(usd_path, asset)
     rgb_frame = (manifest.get("camera_view_frame") or {}).get("rgb_lens_usd_frame")
     if not rgb_frame:
         raise SystemExit(f"[{asset}] manifest camera_view_frame has no rgb_lens_usd_frame - regenerate the URDF")
@@ -890,18 +895,10 @@ def override_link_approximation(usd_path: Path, asset: str, links: list[str], to
         targets = [prim.GetPath() for prim in Usd.PrimRange(link_prim, Usd.TraverseInstanceProxies())
                    if prim.HasAPI(UsdPhysics.MeshCollisionAPI)]
         for path in targets:
-            prim = stage.GetPrimAtPath(path)
             # The importer instances the collision subtree; instance proxies cannot
             # carry overrides, so de-instance the nearest instanceable ancestor
             # (authored in the variant's ROOT layer, i.e. variant-local) first.
-            if prim.IsInstanceProxy():
-                anc = prim
-                while anc and not anc.IsInstance():
-                    anc = anc.GetParent()
-                if not anc:
-                    raise SystemExit(f"[{asset}] instance proxy without instance ancestor: {path}")
-                anc.SetInstanceable(False)
-                prim = stage.GetPrimAtPath(path)
+            prim = _deinstance(stage, path)
             UsdPhysics.MeshCollisionAPI(prim).GetApproximationAttr().Set(token)
             if params.get(link):
                 api = PhysxSchema.PhysxConvexDecompositionCollisionAPI.Apply(prim)
@@ -911,6 +908,79 @@ def override_link_approximation(usd_path: Path, asset: str, links: list[str], to
     stage.GetRootLayer().Save()
     print(f"[{asset}] collider approximation overridden to {token} on {changed} colliders under {links}"
           + (f"; decomposition params on {len([l for l in links if params.get(l)])} links" if params else ""))
+
+
+_PHYSICS_PROPERTY_PREFIXES = ("physics:", "physx")
+
+
+def _deinstance(stage: Usd.Stage, path) -> Usd.Prim:
+    """Make `path` editable: de-instance its nearest instanceable ancestor (root layer)."""
+    prim = stage.GetPrimAtPath(path)
+    if prim.IsInstanceProxy():
+        anc = prim
+        while anc and not anc.IsInstance():
+            anc = anc.GetParent()
+        if not anc:
+            raise SystemExit(f"instance proxy without instance ancestor: {path}")
+        anc.SetInstanceable(False)
+        prim = stage.GetPrimAtPath(path)
+    return prim
+
+
+def move_colliders_to_meshes(usd_path: Path, asset: str) -> None:
+    """Move every collider API from the importer's Xform onto its Mesh child(ren).
+
+    ★2026-10-19 (newton session report). importer 2.4.31 authors PhysicsCollisionAPI /
+    PhysicsMeshCollisionAPI (+ our PhysxConvexDecompositionCollisionAPI) on the Xform
+    `<link>/collisions/<name>/node_STL_BINARY_`; the geometry is its child `mesh`. PhysX
+    builds shapes from that, but the standard UsdPhysics parser (Newton,
+    `UsdPhysics.LoadUsdPhysicsFromRange`) only turns gprims into shapes and drops an Xform
+    collider with "CollisionAPI applied to an unknown UsdGeomGPrim type": in Newton every arm
+    and hand link of openarm_rh56f1_bi_rl had 0 colliders and the hand passed through the cup.
+    MeshCollisionAPI is defined as "how a Mesh is made into a collider", so the APIs and
+    their `physics:*` / `physx*` properties belong on the Mesh. Authored in the root layer:
+    the Mesh gets the schemas and copied values, the Xform gets the schemas deleted and the
+    properties blocked. Collision filters and physics-purpose material bindings live on the
+    link prims and are unaffected.
+    """
+    stage = Usd.Stage.Open(str(usd_path))
+    sources = [prim.GetPath() for prim in Usd.PrimRange.Stage(stage, Usd.TraverseInstanceProxies())
+               if prim.HasAPI(UsdPhysics.CollisionAPI) and not prim.IsA(UsdGeom.Gprim)]
+    moved_shapes = 0
+    for path in sources:
+        source = _deinstance(stage, path)
+        meshes = [c for c in source.GetChildren() if c.IsA(UsdGeom.Gprim)]
+        if not meshes:
+            raise SystemExit(f"[{asset}] collider {path} has no gprim child to carry the collision API")
+        schemas = [s for s in source.GetAppliedSchemas() if "Collision" in s]
+        props = [p for p in source.GetAuthoredProperties() if p.GetName().startswith(_PHYSICS_PROPERTY_PREFIXES)]
+        for mesh in meshes:
+            for schema in schemas:
+                mesh.AddAppliedSchema(schema)
+            for prop in props:
+                if isinstance(prop, Usd.Attribute):
+                    mesh.CreateAttribute(prop.GetName(), prop.GetTypeName(), prop.IsCustom()).Set(prop.Get())
+                else:
+                    mesh.CreateRelationship(prop.GetName(), prop.IsCustom()).SetTargets(prop.GetTargets())
+            moved_shapes += 1
+        for schema in schemas:
+            source.RemoveAppliedSchema(schema)
+        for prop in props:
+            if isinstance(prop, Usd.Attribute):
+                prop.Block()
+            else:
+                prop.SetTargets([])
+    stage.GetRootLayer().Save()
+    print(f"[{asset}] collider APIs moved from {len(sources)} Xforms onto {moved_shapes} meshes")
+
+
+def verify_colliders_on_gprims(usd_path: Path, asset: str) -> None:
+    """Every collider must be a gprim - the condition for UsdPhysics parsers (Newton) to see it."""
+    stage = Usd.Stage.Open(str(usd_path))
+    bad = [str(prim.GetPath()) for prim in Usd.PrimRange.Stage(stage, Usd.TraverseInstanceProxies())
+           if prim.HasAPI(UsdPhysics.CollisionAPI) and not prim.IsA(UsdGeom.Gprim)]
+    if bad:
+        raise SystemExit(f"[{asset}] {len(bad)} colliders are not gprims (Newton drops them), e.g. {bad[0]}")
 
 
 def verify_contract(usd_path: Path, manifest: dict, asset: str,

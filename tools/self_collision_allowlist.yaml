@@ -60,6 +60,15 @@ pairs:
     accept_raw: true
     force_filter: true
     reason: RH56F1 thumb root nests into the palm shell by design.
+  # ★2026-10-19 keep_collision: listed only so the audit does not FAIL; the pair is NOT filtered.
+  #   RH56F1 v2 (grip-range mimic multipliers, thumb_3 1.2244 / thumb_4 0.8178) at full thumb flexion
+  #   (thumb_2 0.47456) with the four fingers open: the thumb pad reaches the index proximal segment.
+  #   Raw vendor-STL surfaces touch (point-cloud gap 0.004mm, normal-side depth 1.2~1.4mm right, 0.9mm
+  #   left) - real geometry, not a hull artifact. Both meshes are non-watertight, so the audit cannot
+  #   measure it raw and would FAIL it. Real contact stays a collision (user rule 09.15).
+  - links: ["*_hl_index_1", "*_hl_thumb_sensor"]
+    keep_collision: true
+    reason: RH56F1 v2 thumb pad meets the index proximal segment at full thumb flexion - real CAD contact, kept as a collision (not filtered).
   - links: ["*_hl_palm_1", "*_hl_[imrp]*_1"]
     reason: >-
       RH56F1 palm_1 back cover wraps the four finger roots (hinged inside it);
