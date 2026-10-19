@@ -1113,9 +1113,9 @@ def bake_decomposition_hulls(usd_path: Path, asset: str, links: list[str],
                     _author_hull(stage, source, i, vertices, _hull_triangles(vertices, polygons), provenance)
                 source.SetActive(False)
                 counts[link] += len(hulls)
+        stage.GetRootLayer().Save()   # before Erase: the cache drops the stage and the handle expires
     finally:
         cache.Erase(cache_id)
-    stage.GetRootLayer().Save()
     print(f"[{asset}] baked PhysX decomposition into {sum(counts.values())} convexHull meshes on {len(counts)} links")
     return counts
 
