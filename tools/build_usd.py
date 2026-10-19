@@ -420,6 +420,10 @@ def convert(asset: str) -> Path:
     collider_type = policy["default"]
     hull_links = list(policy.get("convex_hull_links") or [])
     decomp_links = list(policy.get("convex_decomposition_links") or [])
+    decomp_params = dict(policy.get("convex_decomposition_params") or {})
+    unknown = sorted(set(decomp_params) - set(decomp_links))
+    if unknown:
+        raise SystemExit(f"[{asset}] convex_decomposition_params for links that are not decomposition links: {unknown}")
 
     out_dir = RL_DIR / asset
     converter_cfg = UrdfConverterCfg(
@@ -448,7 +452,7 @@ def convert(asset: str) -> Path:
     if hull_links:
         override_link_approximation(usd_path, asset, hull_links, "convexHull")
     if decomp_links:
-        override_link_approximation(usd_path, asset, decomp_links, "convexDecomposition")
+        override_link_approximation(usd_path, asset, decomp_links, "convexDecomposition", decomp_params)
     rgb_frame = (manifest.get("camera_view_frame") or {}).get("rgb_lens_usd_frame")
     if not rgb_frame:
         raise SystemExit(f"[{asset}] manifest camera_view_frame has no rgb_lens_usd_frame - regenerate the URDF")
@@ -456,7 +460,8 @@ def convert(asset: str) -> Path:
     # ★head 검증은 sync 후로 옮겼다 — 참조가 상대경로라 hdgp 배치에서만 해석된다.
     verify_contract(usd_path, manifest, asset, urdf_path, want=APPROX_TOKEN[collider_type],
                     per_link_want={**{l: "convexHull" for l in hull_links},
-                                   **{l: "convexDecomposition" for l in decomp_links}})
+                                   **{l: "convexDecomposition" for l in decomp_links}},
+                    per_link_params=decomp_params)
     patch_and_verify_mimic_joints(usd_path, asset, urdf_path)
     apply_collision_filters(usd_path, urdf_path, asset,
                             [tuple(p) for p in manifest["self_collision_filtered_pairs"]])
@@ -851,13 +856,26 @@ def apply_collision_filters(usd_path: Path, urdf_path: Path, asset: str,
 APPROX_TOKEN = {"convex_decomposition": "convexDecomposition", "convex_hull": "convexHull"}
 
 
-def override_link_approximation(usd_path: Path, asset: str, links: list[str], token: str) -> None:
+def _decomposition_attr(api, key: str):
+    getter = getattr(api, f"Get{key[0].upper()}{key[1:]}Attr", None)
+    if getter is None:
+        raise SystemExit(f"PhysxConvexDecompositionCollisionAPI has no attribute {key!r}")
+    return getter()
+
+
+def override_link_approximation(usd_path: Path, asset: str, links: list[str], token: str,
+                                params: dict[str, dict] | None = None) -> None:
     """Author `physics:approximation = token` on every mesh collider under `links`.
 
     The importer only knows one collider type per asset; the per-link policy
     (hand = decomposition, OpenArm links = hull) is applied here, authored in
     the asset's root layer (same place as the collision filters).
+
+    `params[link]` (decomposition only) is authored as PhysxConvexDecompositionCollisionAPI
+    values. Without the API PhysX cooks with its own defaults, which gave the same palm
+    mesh 16 or 32 hulls depending on context (2026-10-19) - so tuned links state them.
     """
+    params = params or {}
     stage = Usd.Stage.Open(str(usd_path))
     root_path = stage.GetDefaultPrim().GetPath()
     changed = 0
@@ -881,14 +899,20 @@ def override_link_approximation(usd_path: Path, asset: str, links: list[str], to
                 anc.SetInstanceable(False)
                 prim = stage.GetPrimAtPath(path)
             UsdPhysics.MeshCollisionAPI(prim).GetApproximationAttr().Set(token)
+            if params.get(link):
+                api = PhysxSchema.PhysxConvexDecompositionCollisionAPI.Apply(prim)
+                for key, value in params[link].items():
+                    _decomposition_attr(api, key).Set(value)
             changed += 1
     stage.GetRootLayer().Save()
-    print(f"[{asset}] collider approximation overridden to {token} on {changed} colliders under {links}")
+    print(f"[{asset}] collider approximation overridden to {token} on {changed} colliders under {links}"
+          + (f"; decomposition params on {len([l for l in links if params.get(l)])} links" if params else ""))
 
 
 def verify_contract(usd_path: Path, manifest: dict, asset: str,
                     urdf_path: Path | None = None, want: str = "convexDecomposition",
-                    per_link_want: dict[str, str] | None = None) -> None:
+                    per_link_want: dict[str, str] | None = None,
+                    per_link_params: dict[str, dict] | None = None) -> None:
     """Manifest joints and every inertial link must exist; colliders must match collider_type.
 
     ★The body check is not decorative. hdgp addresses bodies **by name** -
@@ -917,6 +941,17 @@ def verify_contract(usd_path: Path, manifest: dict, asset: str,
                     expected_here = token
             if got != expected_here:
                 wrong_approximations.append((prim.GetPath().pathString, got, expected_here))
+            for link, values in (per_link_params or {}).items():
+                if f"/{link}/" not in prim.GetPath().pathString:
+                    continue
+                api = PhysxSchema.PhysxConvexDecompositionCollisionAPI(prim)
+                if not prim.HasAPI(PhysxSchema.PhysxConvexDecompositionCollisionAPI):
+                    wrong_approximations.append((prim.GetPath().pathString, "no decomposition API", values))
+                    continue
+                for key, value in values.items():
+                    have = _decomposition_attr(api, key).Get()
+                    if have != value and not (isinstance(value, float) and abs(have - value) < 1e-6):
+                        wrong_approximations.append((prim.GetPath().pathString, f"{key}={have}", f"{key}={value}"))
 
     if urdf_path is not None:
         # Every link with an <inertial> is a body downstream code may address.

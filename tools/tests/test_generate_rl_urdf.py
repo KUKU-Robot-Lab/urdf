@@ -632,6 +632,30 @@ def test_rh56f1_distal_collider_only_on_sensor() -> None:
         assert has_col[f"{side}_hl_palm_sensor"] and has_col[f"{side}_hl_thumb_3"]
     policy = load_manifest("openarm_rh56f1_bi")["collision_approximation"]
     assert policy["default"] == "convex_hull"
+    hand = ["palm_1", "palm_2", "palm_3", "base", "thumb_2", "thumb_3", "thumb_sensor",
+            *(f"{f}_{k}" for f in ("index", "middle", "ring", "pinky") for k in ("1", "sensor"))]
     assert sorted(policy["convex_decomposition_links"]) == sorted(
-        ["body_link", *(f"{s}_hl_{p}" for s in ("r", "l") for p in ("palm_1", "palm_2"))])
+        ["body_link", *(f"{s}_hl_{p}" for s in ("r", "l") for p in hand)])
     assert "body_link" not in policy["convex_hull_links"]
+    # hull 이 이미 정확한 링크(thumb_1·palm_sensor)는 hull 로 남는다
+    for s in ("r", "l"):
+        assert f"{s}_hl_thumb_1" not in policy["convex_decomposition_links"]
+        assert f"{s}_hl_palm_sensor" not in policy["convex_decomposition_links"]
+
+
+def test_rh56f1_decomposition_params_explicit_and_mirrored() -> None:
+    """손 decomposition 링크는 파라미터를 모두 명시한다(API 없으면 PhysX 기본값이 맥락 따라 16·32조각). 좌우 같은 값."""
+    params = load_manifest("openarm_rh56f1_bi")["collision_approximation"]["convex_decomposition_params"]
+    assert "body_link" not in params  # 09.15 동작(PhysX 기본값) 유지
+    hand = {link for link in load_manifest("openarm_rh56f1_bi")["collision_approximation"]["convex_decomposition_links"]
+            if link != "body_link"}
+    assert set(params) == hand
+    for link, values in params.items():
+        assert values["shrinkWrap"] is True, link
+        assert 1 <= values["maxConvexHulls"] <= 32, link
+        assert 0 < values["errorPercentage"] <= 10, link
+        if link.startswith("r_hl_"):
+            assert params["l_hl_" + link[5:]] == values, link
+    assert params["r_hl_index_sensor"]["maxConvexHulls"] == 8
+    assert params["r_hl_index_1"]["maxConvexHulls"] == 32
+    assert gen.convex_decomposition_params("openarm_rh56f1_bi") == params

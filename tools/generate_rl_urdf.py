@@ -179,19 +179,48 @@ def drop_duplicate_collisions(root: ET.Element, asset: str) -> list[str]:
 #   형상을 바로잡는다"). 팔 영자세 RH56F1 중지 1.2 rad 가 몸통과 원본 46 mm·감사 hull 18 mm 떨어져 있는데
 #   PhysX 는 middle_sensor↔body_link 2.25 N, 편 엄지 외전은 손바닥 25.6 mm 밀림 — 큰 기둥을 GPU hull
 #   (64 꼭짓점 제한)로 구우면 수십 mm 부푼다.
-DECOMPOSITION_LINKS: dict[str, frozenset[str]] = {
-    "openarm_rh56f1_bi": frozenset(
-        {"body_link", *(f"{side}_hl_{link}" for side in ("r", "l") for link in ("palm_1", "palm_2"))}),
+# ★2026-10-19 RH56F1 손 링크 decomposition 확대 + 파라미터 명시 (사용자: "충돌체 좀더 정밀하게 할 필요는 있는것 같은데").
+#   근거: 링크마다 PhysX 쿠킹 API 로 근사 8가지를 구워 벤더 STL 과 비교했다(/tmp/cadcmp/cook3.py·analyze4.py,
+#   report/grasp/grasp_rh56f1_collision_cad_1019_eval.md). 충돌체가 실제보다 튀어나온 양(p95 / 최대, mm):
+#     손끝 *_sensor   hull 2.2~3.0 / 4.6   → 수축 감쌈·오차 5 %·8조각   0.4~0.7 / 1.6~2.5
+#     첫마디 *_1      hull 2.2 / 4.5       → 수축 감쌈·오차 2 %·32조각  1.0~1.2 / 2.3~3.4
+#     엄지 thumb_2·3  hull 4.8·4.5 / 9.4·7.1 → 같은 32조각 설정      1.6·1.0 / 3.8·2.0
+#     palm_1·2       기본 분해(16조각) 4.2 / 8.3 → 32조각 설정        2.2·2.6 / 5.7·5.2
+#     palm_3         hull 22.6 / 31.5(실제 18 cm³ 를 173 cm³ 로 구움) → 16조각 3.9 / 8.4
+#     base(손목)     hull 8.5 / 18.5      → 16조각                  2.5 / 6.1
+#   thumb_1(1.5 / 2.6)·palm_sensor(0.1 / 0.2)는 hull 이 이미 정확해 그대로 둔다.
+#   API 를 쓰지 않으면 PhysX 기본값(같은 메시가 맥락 따라 16·32조각)으로 구워져 재현성이 없으므로 값을 명시한다.
+#   조각 수가 형상 수다(09.09 손 전체 기본 분해 = 731개 중 710개 → 접촉 버퍼 넘침). 이 표로 손 하나 47 → 330.
+_DECOMP_FINE = {"shrinkWrap": True, "errorPercentage": 2.0, "maxConvexHulls": 32, "voxelResolution": 2_000_000}
+_DECOMP_MID = {"shrinkWrap": True, "errorPercentage": 5.0, "maxConvexHulls": 16}
+_DECOMP_TIP = {"shrinkWrap": True, "errorPercentage": 5.0, "maxConvexHulls": 8}
+_RH56F1_HAND_DECOMPOSITION: dict[str, dict] = {
+    "palm_1": _DECOMP_FINE, "palm_2": _DECOMP_FINE, "palm_3": _DECOMP_MID, "base": _DECOMP_MID,
+    "thumb_2": _DECOMP_FINE, "thumb_3": _DECOMP_FINE, "thumb_sensor": _DECOMP_TIP,
+    **{f"{f}_1": _DECOMP_FINE for f in ("index", "middle", "ring", "pinky")},
+    **{f"{f}_sensor": _DECOMP_TIP for f in ("index", "middle", "ring", "pinky")},
+}
+# 링크 → PhysxConvexDecompositionCollisionAPI 값. 빈 dict = API 를 쓰지 않는다(PhysX 기본값, body_link 의 09.15 동작 유지).
+DECOMPOSITION_LINKS: dict[str, dict[str, dict]] = {
+    "openarm_rh56f1_bi": {
+        "body_link": {},
+        **{f"{side}_hl_{link}": dict(params) for side in ("r", "l") for link, params in _RH56F1_HAND_DECOMPOSITION.items()},
+    },
 }
 
 
 def convex_decomposition_links(root: ET.Element, asset: str) -> list[str]:
     """USD 빌드가 convexDecomposition 으로 굽는 링크. 이름이 하나라도 없으면 실패한다."""
-    wanted = DECOMPOSITION_LINKS.get(asset, frozenset())
+    wanted = set(DECOMPOSITION_LINKS.get(asset, {}))
     missing = wanted - {link.get("name") for link in root.findall("link")}
     if missing:
         raise RuntimeError(f"{asset}: DECOMPOSITION_LINKS 에 없는 링크 {sorted(missing)}")
     return sorted(wanted)
+
+
+def convex_decomposition_params(asset: str) -> dict[str, dict]:
+    """링크별 decomposition 파라미터(빈 값인 링크는 뺀다). build_usd 가 USD 에 그대로 쓴다."""
+    return {link: dict(params) for link, params in sorted(DECOMPOSITION_LINKS.get(asset, {}).items()) if params}
 
 
 def collider_default(asset: str) -> str:
@@ -1357,6 +1386,12 @@ def write_manifest(
     text.append(yaml_list([link for link in convex_hull_links(root) if link not in decomposition], indent=2))
     text.append("  convex_decomposition_links:\n")
     text.append(yaml_list(decomposition, indent=2))
+    params = convex_decomposition_params(urdf_path.stem.removesuffix("_rl"))
+    if params:
+        text.append("  convex_decomposition_params:\n")
+        for link, values in params.items():
+            body = ", ".join(f"{k}: {str(v).lower() if isinstance(v, bool) else v}" for k, v in values.items())
+            text.append(f"    {link}: {{{body}}}\n")
     text.append("schema:\n")
     text.append("  body_root: stage-level root link with no geometry\n")
     text.append("  body_link: openarm physical base link\n")
