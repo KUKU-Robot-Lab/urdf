@@ -15,7 +15,9 @@ code so they can never drift from what the asset pipeline assumes:
   hull-only WARN pairs are all authored as PhysX collision filters.
   Since 2026-10-19 the collider APIs sit on the Mesh gprims, not on the
   importer's Xform (`move_colliders_to_meshes`), so Newton's UsdPhysics parser
-  sees them too.
+  sees them too, and mirrored meshes (the vendor's left-arm scale
+  "0.001 -0.001 0.001") are baked into positive scale + mirrored points
+  (`bake_mirrored_scales`) because Newton's MuJoCo solver rejects them.
 - merge_fixed_joints False: the historical GUI imports did NOT merge. Measured
   on the previous openarm_tesollo_bi_s_rl USD: 77 rigid bodies including every
   `*_hl_palm` and `*_tip`. Merging drops 20 bodies, and hdgp addresses them by
@@ -81,7 +83,8 @@ from pathlib import Path  # noqa: E402
 import json  # noqa: E402
 import yaml  # noqa: E402
 from isaaclab.sim.converters import UrdfConverter, UrdfConverterCfg  # noqa: E402
-from pxr import Gf, PhysxSchema, Usd, UsdGeom, UsdPhysics  # noqa: E402
+import numpy as np  # noqa: E402
+from pxr import Gf, PhysxSchema, Usd, UsdGeom, UsdPhysics, Vt  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 RL_DIR = ROOT / "generated" / "rl"
@@ -455,6 +458,7 @@ def convert(asset: str) -> Path:
             "regenerate with `python3 tools/generate_rl_urdf.py` (audit enabled)"
         )
     usd_path = Path(UrdfConverter(converter_cfg).usd_path)
+    bake_mirrored_scales(out_dir, asset)
     graft_head_v1(usd_path, asset)
     if hull_links:
         override_link_approximation(usd_path, asset, hull_links, "convexHull")
@@ -462,6 +466,7 @@ def convert(asset: str) -> Path:
         override_link_approximation(usd_path, asset, decomp_links, "convexDecomposition", decomp_params)
     move_colliders_to_meshes(usd_path, asset)
     verify_colliders_on_gprims(usd_path, asset)
+    verify_no_mirrored_xforms(usd_path, asset)
     rgb_frame = (manifest.get("camera_view_frame") or {}).get("rgb_lens_usd_frame")
     if not rgb_frame:
         raise SystemExit(f"[{asset}] manifest camera_view_frame has no rgb_lens_usd_frame - regenerate the URDF")
@@ -972,6 +977,148 @@ def move_colliders_to_meshes(usd_path: Path, asset: str) -> None:
                 prop.SetTargets([])
     stage.GetRootLayer().Save()
     print(f"[{asset}] collider APIs moved from {len(sources)} Xforms onto {moved_shapes} meshes")
+
+
+def _local_xform(prim: Usd.Prim) -> Gf.Matrix4d:
+    m = UsdGeom.Xformable(prim).GetLocalTransformation()
+    return m[0] if isinstance(m, tuple) else m
+
+
+def _face_reversed(counts, values) -> list:
+    """Reverse every face's slice of a face-ordered array, keeping the face's first entry."""
+    out, i = [], 0
+    for count in counts:
+        face = list(values[i:i + count])
+        out.extend(face[:1] + face[:0:-1])
+        i += count
+    if i != len(values):
+        raise SystemExit(f"face-varying array has {len(values)} entries, faces need {i}")
+    return out
+
+
+def _signed_volume(points: np.ndarray, counts, indices) -> float:
+    """Signed volume of a polygon mesh (fan triangulation); its sign follows the winding."""
+    total, i = 0.0, 0
+    for count in counts:
+        a = points[indices[i]]
+        for k in range(1, count - 1):
+            total += float(np.dot(a, np.cross(points[indices[i + k]], points[indices[i + k + 1]])))
+        i += count
+    return total / 6.0
+
+
+def _mesh_in_frame(mesh: UsdGeom.Mesh, frame: Usd.Prim) -> tuple[np.ndarray, float]:
+    """Mesh points expressed in `frame`'s parent space, plus their signed volume."""
+    rel, _ = UsdGeom.XformCache().ComputeRelativeTransform(mesh.GetPrim(), frame.GetParent())
+    m = np.array(rel, dtype=np.float64)
+    pts = np.array(mesh.GetPointsAttr().Get(), dtype=np.float64)
+    world = np.c_[pts, np.ones(len(pts))] @ m
+    world = world[:, :3]
+    return world, _signed_volume(world, mesh.GetFaceVertexCountsAttr().Get(), mesh.GetFaceVertexIndicesAttr().Get())
+
+
+def _bake_flip_into_mesh(mesh: UsdGeom.Mesh, flip: np.ndarray) -> None:
+    """Mirror a mesh's geometry by `flip` (+-1 per axis) and keep its faces outward.
+
+    points and normals are mirrored; the vertex order of every face is reversed (a mirror
+    turns the winding inside out); face-varying primvars follow that order. Face order is
+    unchanged, so GeomSubsets (material assignments) stay valid.
+    """
+    for attr in (mesh.GetPointsAttr(), mesh.GetFaceVertexIndicesAttr(), mesh.GetNormalsAttr()):
+        if attr.GetNumTimeSamples():
+            raise SystemExit(f"{mesh.GetPath()}: time-sampled {attr.GetName()} is not supported")
+    counts = mesh.GetFaceVertexCountsAttr().Get()
+    pts = np.array(mesh.GetPointsAttr().Get(), dtype=np.float64) * flip
+    mesh.GetPointsAttr().Set(Vt.Vec3fArray([Gf.Vec3f(*p) for p in pts]))
+    mesh.GetFaceVertexIndicesAttr().Set(Vt.IntArray(_face_reversed(counts, mesh.GetFaceVertexIndicesAttr().Get())))
+    mesh.GetExtentAttr().Set(Vt.Vec3fArray([Gf.Vec3f(*pts.min(axis=0)), Gf.Vec3f(*pts.max(axis=0))]))
+    normals = mesh.GetNormalsAttr()
+    if normals.HasAuthoredValue():
+        vals = [Gf.Vec3f(*(np.array(n) * flip)) for n in normals.Get()]
+        if mesh.GetNormalsInterpolation() == UsdGeom.Tokens.faceVarying:
+            vals = _face_reversed(counts, vals)
+        normals.Set(Vt.Vec3fArray(vals))
+    for pv in UsdGeom.PrimvarsAPI(mesh).GetPrimvars():
+        if not pv.HasAuthoredValue():
+            continue
+        is_normal = pv.GetPrimvarName() == "normals"
+        face_varying = pv.GetInterpolation() == UsdGeom.Tokens.faceVarying
+        if is_normal:
+            pv.Set(Vt.Vec3fArray([Gf.Vec3f(*(np.array(n) * flip)) for n in pv.Get()]))
+        if not face_varying:
+            continue
+        if pv.IsIndexed():
+            pv.SetIndices(Vt.IntArray(_face_reversed(counts, pv.GetIndices())))
+        else:
+            pv.Set(type(pv.Get())(_face_reversed(counts, pv.Get())))
+
+
+def bake_mirrored_scales(out_dir: Path, asset: str) -> None:
+    """Bake every negative (mirroring) xformOp:scale into the mesh points.
+
+    ★2026-10-19 (newton session report). The vendor URDF mirrors the left arm with
+    scale="0.001 -0.001 0.001" (14 meshes, link4 excepted). PhysX accepts that, but Newton
+    decomposes a determinant<0 transform into a rotation plus scale (-0.001,-0.001,-0.001)
+    and SolverMuJoCo then asserts "Only plane shapes are allowed to have a size of zero".
+    In base.usd (where the importer authors geometry under /colliders and /visuals) each
+    such scale becomes positive, its meshes get the mirror in their points and reversed
+    face winding. The geometry in the link frame is unchanged - checked per mesh below
+    (points equal, signed volume flips sign because the outward faces are now authored).
+    """
+    layer_path = out_dir / "configuration" / f"{asset}_base.usd"
+    stage = Usd.Stage.Open(str(layer_path))
+    targets = []
+    for prim in Usd.PrimRange.Stage(stage):
+        if not str(prim.GetPath()).startswith(("/colliders/", "/visuals/")):
+            continue
+        ops = UsdGeom.Xformable(prim).GetOrderedXformOps() if prim.IsA(UsdGeom.Xformable) else []
+        scale_ops = [op for op in ops if op.GetOpType() == UsdGeom.XformOp.TypeScale]
+        if not scale_ops:
+            continue
+        value = scale_ops[0].Get()
+        if value[0] * value[1] * value[2] >= 0:
+            continue
+        if len(scale_ops) != 1 or ops[-1] != scale_ops[0]:
+            raise SystemExit(f"[{asset}] {prim.GetPath()}: mirroring scale is not the single innermost op")
+        targets.append((prim, scale_ops[0], value))
+    meshes_done = 0
+    for prim, op, value in targets:
+        flip = np.sign(np.array(value, dtype=np.float64))
+        meshes = [UsdGeom.Mesh(p) for p in Usd.PrimRange(prim) if p.IsA(UsdGeom.Mesh)]
+        others = [p for p in Usd.PrimRange(prim) if p.IsA(UsdGeom.Gprim) and not p.IsA(UsdGeom.Mesh)]
+        if not meshes or others:
+            raise SystemExit(f"[{asset}] {prim.GetPath()}: mirroring scale over {len(meshes)} meshes and "
+                             f"{len(others)} other gprims - only meshes can be baked")
+        for mesh in meshes:
+            p = mesh.GetPrim()
+            while p != prim:
+                if not np.allclose(np.array(_local_xform(p)), np.eye(4), atol=1e-9):
+                    raise SystemExit(f"[{asset}] {p.GetPath()}: non-identity transform under a mirroring scale")
+                p = p.GetParent()
+        before = [_mesh_in_frame(m, prim) for m in meshes]
+        op.Set(type(value)(*[abs(v) for v in value]))
+        for mesh in meshes:
+            _bake_flip_into_mesh(mesh, flip)
+        for mesh, (pts0, vol0) in zip(meshes, before):
+            pts1, vol1 = _mesh_in_frame(mesh, prim)
+            moved = float(np.abs(pts1 - pts0).max())
+            if moved > 1e-7 or not math.isclose(vol1, -vol0, rel_tol=1e-6, abs_tol=1e-15):
+                raise SystemExit(f"[{asset}] {mesh.GetPath()}: bake changed the geometry "
+                                 f"(max point move {moved:.3g} m, signed volume {vol0:.3g} -> {vol1:.3g})")
+        meshes_done += len(meshes)
+    if targets:
+        stage.GetRootLayer().Save()
+    print(f"[{asset}] baked {len(targets)} mirroring scales into {meshes_done} meshes")
+
+
+def verify_no_mirrored_xforms(usd_path: Path, asset: str) -> None:
+    """No prim of the composed robot may carry a determinant<0 local transform (Newton cannot load it)."""
+    stage = Usd.Stage.Open(str(usd_path))
+    bad = [str(prim.GetPath()) for prim in Usd.PrimRange.Stage(stage, Usd.TraverseInstanceProxies())
+           if prim.IsA(UsdGeom.Xformable)
+           and _local_xform(prim).GetDeterminant() < 0]
+    if bad:
+        raise SystemExit(f"[{asset}] {len(bad)} prims still mirror their children, e.g. {bad[:3]}")
 
 
 def verify_colliders_on_gprims(usd_path: Path, asset: str) -> None:
