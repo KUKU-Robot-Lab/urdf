@@ -153,15 +153,19 @@ RH56F1_COLLISION_DROP_LINKS = frozenset(
     for side in ("r", "l")
     for link in ("thumb_4", "thumb_tip", *(f"{f}_{k}" for f in ("index", "middle", "ring", "pinky") for k in ("2", "tip")))
 )
-COLLISION_DROP_LINKS: dict[str, frozenset[str]] = {
-    "openarm_rh56f1_bi": RH56F1_COLLISION_DROP_LINKS,
-    "openarm_rh56f1_bi_v2": RH56F1_COLLISION_DROP_LINKS,
-}
+#: 자산별 예외. RH56F1 소스로 만드는 자산은 등록하지 않아도 RH56F1_COLLISION_DROP_LINKS 가 기본이다.
+COLLISION_DROP_LINKS: dict[str, frozenset[str]] = {}
+
+
+def collision_drop_links(asset: str) -> frozenset[str]:
+    if asset in COLLISION_DROP_LINKS:
+        return COLLISION_DROP_LINKS[asset]
+    return RH56F1_COLLISION_DROP_LINKS if is_rh56f1(asset) else frozenset()
 
 
 def drop_duplicate_collisions(root: ET.Element, asset: str) -> list[str]:
-    """COLLISION_DROP_LINKS 의 링크에서 collision 만 뗀다. 이름이 하나라도 없으면 실패한다(조용한 무효 방지)."""
-    targets = COLLISION_DROP_LINKS.get(asset, frozenset())
+    """collision_drop_links 의 링크에서 collision 만 뗀다. 이름이 하나라도 없으면 실패한다(조용한 무효 방지)."""
+    targets = collision_drop_links(asset)
     dropped = []
     for link in root.findall("link"):
         if link.get("name") in targets:
@@ -212,23 +216,32 @@ _RH56F1_HAND_DECOMPOSITION: dict[str, dict] = {
     **{f"{f}_1": _DECOMP_PHALANX for f in ("index", "middle", "ring", "pinky")},
 }
 # 링크 → PhysxConvexDecompositionCollisionAPI 값. 빈 dict = API 를 쓰지 않는다(PhysX 기본값, body_link 의 09.15 동작 유지).
-#   ★10.19 사용자 결정 "새 경로": 위 표는 새 자산 `openarm_rh56f1_bi_v2` 에만 쓴다. `openarm_rh56f1_bi` 는 배포된
-#   정책 12개(sim2real contract_assets)가 hdgp 의 그 URDF 로 손끝 FK 를 하므로 09.15 설정(palm_1·2 기본 분해)을 유지한다.
+#   ★10.19 사용자 결정 "RH56F1 기본 = 2판 설정": RH56F1 소스(openarm_bi_rh56f1.urdf)로 만드는 자산은 등록하지 않아도
+#   RH56F1_DEFAULT_DECOMPOSITION(2판 표)을 쓴다. 예외는 DECOMPOSITION_LINKS 에 자산 이름으로 적는다.
+#   `openarm_rh56f1_bi`(1판)는 배포된 정책 12개(sim2real contract_assets)가 hdgp 의 그 URDF 로 손끝 FK 를 하므로
+#   09.15 설정(palm_1·2 기본 분해)을 유지하는 예외다.
+RH56F1_DEFAULT_DECOMPOSITION: dict[str, dict] = {
+    "body_link": {},
+    **{f"{side}_hl_{link}": dict(params) for side in ("r", "l") for link, params in _RH56F1_HAND_DECOMPOSITION.items()},
+}
 DECOMPOSITION_LINKS: dict[str, dict[str, dict]] = {
     "openarm_rh56f1_bi": {
         "body_link": {},
         **{f"{side}_hl_{link}": {} for side in ("r", "l") for link in ("palm_1", "palm_2")},
     },
-    "openarm_rh56f1_bi_v2": {
-        "body_link": {},
-        **{f"{side}_hl_{link}": dict(params) for side in ("r", "l") for link, params in _RH56F1_HAND_DECOMPOSITION.items()},
-    },
 }
+
+
+def decomposition_table(asset: str) -> dict[str, dict]:
+    """자산의 링크 → decomposition 값. 자산 예외 > 손 계열 기본(RH56F1) > 없음."""
+    if asset in DECOMPOSITION_LINKS:
+        return DECOMPOSITION_LINKS[asset]
+    return RH56F1_DEFAULT_DECOMPOSITION if is_rh56f1(asset) else {}
 
 
 def convex_decomposition_links(root: ET.Element, asset: str) -> list[str]:
     """USD 빌드가 convexDecomposition 으로 굽는 링크. 이름이 하나라도 없으면 실패한다."""
-    wanted = set(DECOMPOSITION_LINKS.get(asset, {}))
+    wanted = set(decomposition_table(asset))
     missing = wanted - {link.get("name") for link in root.findall("link")}
     if missing:
         raise RuntimeError(f"{asset}: DECOMPOSITION_LINKS 에 없는 링크 {sorted(missing)}")
@@ -237,7 +250,7 @@ def convex_decomposition_links(root: ET.Element, asset: str) -> list[str]:
 
 def convex_decomposition_params(asset: str) -> dict[str, dict]:
     """링크별 decomposition 파라미터(빈 값인 링크는 뺀다). build_usd 가 USD 에 그대로 쓴다."""
-    return {link: dict(params) for link, params in sorted(DECOMPOSITION_LINKS.get(asset, {}).items()) if params}
+    return {link: dict(params) for link, params in sorted(decomposition_table(asset).items()) if params}
 
 
 def collider_default(asset: str) -> str:
@@ -296,6 +309,14 @@ SOURCES = OrderedDict(
         ("openarm_gripper_bi", ROOT / "generated" / "source" / "openarm_gripper_bi.urdf"),
     ]
 )
+RH56F1_SOURCE = ROOT / "generated" / "source" / "openarm_bi_rh56f1.urdf"
+#: RH56F1 2판 설정(손 충돌체 세분화·쥐는 범위 mimic 배율·중복 collision 제거)을 받지 않는 RH56F1 자산.
+RH56F1_LEGACY_ASSETS = frozenset({"openarm_rh56f1_bi"})
+
+
+def is_rh56f1(asset: str) -> bool:
+    """RH56F1 소스로 만드는 자산인가(손 계열 기본값을 고르는 기준)."""
+    return SOURCES.get(asset) == RH56F1_SOURCE
 
 
 def asset_robot_name(source_name: str) -> str:
@@ -939,7 +960,7 @@ HAND_LOCKED_JOINTS: dict[str, tuple[str, ...]] = {
 }
 
 
-#: ★2026-10-19 RH56F1 종속 마디 배율(사용자 결정 "쥐는 범위 맞춤", 새 자산 openarm_rh56f1_bi_v2 에만). PhysX mimic 은 관절 하나에
+#: ★2026-10-19 RH56F1 종속 마디 배율(사용자 결정 "쥐는 범위 맞춤", 2판에서 시작해 RH56F1 기본값). PhysX mimic 은 관절 하나에
 #:   직선 하나(배율·오프셋)뿐이라 곡선인 실제 링크 연동을 **어느 구간에 맞출지** 골라야 한다.
 #: 근거: 벤더 연동표(vendor/RH56F1/*/参数资料/RH56F1行程与角度对应关系（含对比）.xlsx →
 #:   sim2real logs/rh56f1_probe_0930/rh56f1_mimic_table.npz)를 10.19 실기 쥐기 범위에서 원점 고정
@@ -952,13 +973,22 @@ HAND_LOCKED_JOINTS: dict[str, tuple[str, ...]] = {
 #: 오프셋은 0 으로 둔다 — 음수 오프셋은 _1 이 작을 때 _2 하한 0 과 부딪히고, sim2real 배포 맵
 #:   (deploy/policy_control/config/rh56f1_hand_map.yaml mimic.k)은 배율만 받는다(같이 바꿀 것).
 #: _2 실측(사진 등)이 표와 3° 넘게 다르면 이 표를 실측으로 바꾼다.
-HAND_MIMIC_MULTIPLIER: dict[str, dict[str, float]] = {
-    "openarm_rh56f1_bi_v2": {
-        r"[rl]_hj_(index|middle|ring|pinky)_2": 1.0268,
-        r"[rl]_hj_thumb_3": 1.2244,
-        r"[rl]_hj_thumb_4": 0.8178,
-    },
+#: ★10.19 사용자 "RH56F1 기본 = 2판 설정": RH56F1 소스 자산은 RH56F1_LEGACY_ASSETS(1판, 벤더 배율 유지)만 빼고
+#:   이 배율이 기본이다. 자산별로 다르게 하려면 HAND_MIMIC_MULTIPLIER 에 자산 이름으로 적는다.
+RH56F1_DEFAULT_MIMIC_MULTIPLIER: dict[str, float] = {
+    r"[rl]_hj_(index|middle|ring|pinky)_2": 1.0268,
+    r"[rl]_hj_thumb_3": 1.2244,
+    r"[rl]_hj_thumb_4": 0.8178,
 }
+HAND_MIMIC_MULTIPLIER: dict[str, dict[str, float]] = {}
+
+
+def mimic_multiplier_table(asset: str) -> dict[str, float]:
+    if asset in HAND_MIMIC_MULTIPLIER:
+        return HAND_MIMIC_MULTIPLIER[asset]
+    if is_rh56f1(asset) and asset not in RH56F1_LEGACY_ASSETS:
+        return RH56F1_DEFAULT_MIMIC_MULTIPLIER
+    return {}
 
 
 def apply_hand_mimic_multiplier(root: ET.Element, asset: str) -> list[str]:
@@ -966,7 +996,7 @@ def apply_hand_mimic_multiplier(root: ET.Element, asset: str) -> list[str]:
 
     패턴마다 좌우 짝이 모두 맞아야 하고, 대상이 mimic 관절이 아니면 빌드 에러다.
     """
-    table = HAND_MIMIC_MULTIPLIER.get(asset)
+    table = mimic_multiplier_table(asset)
     if not table:
         return []
     done: list[str] = []
@@ -1453,8 +1483,9 @@ def write_manifest(
     decomposition = convex_decomposition_links(root, urdf_path.stem.removesuffix("_rl"))
     text.append("  convex_hull_links:\n")
     text.append(yaml_list([link for link in convex_hull_links(root) if link not in decomposition], indent=2))
-    text.append("  convex_decomposition_links:\n")
-    text.append(yaml_list(decomposition, indent=2))
+    if decomposition:  # 빈 목록이면 키를 쓰지 않는다(빈 yaml_list 는 키와 같은 들여쓰기의 `[]` 라 YAML 이 깨진다)
+        text.append("  convex_decomposition_links:\n")
+        text.append(yaml_list(decomposition, indent=2))
     params = convex_decomposition_params(urdf_path.stem.removesuffix("_rl"))
     if params:
         text.append("  convex_decomposition_params:\n")

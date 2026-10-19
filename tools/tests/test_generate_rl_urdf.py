@@ -676,8 +676,22 @@ def test_rh56f1_v2_mimic_multiplier_fit_to_grip_range() -> None:
             assert mimic.get("joint") == f"{side}_hj_{leader}"
             assert float(mimic.get("multiplier")) == pytest.approx(k)
             assert float(mimic.get("offset", "0")) == 0.0
-    # 다른 자산(1판 포함)에는 손대지 않는다
-    assert set(gen.HAND_MIMIC_MULTIPLIER) == {"openarm_rh56f1_bi_v2"}
+    # RH56F1 기본값에서 오고, 1판(예외)·다른 손에는 손대지 않는다
+    assert gen.mimic_multiplier_table("openarm_rh56f1_bi_v2") == gen.RH56F1_DEFAULT_MIMIC_MULTIPLIER
+    assert gen.mimic_multiplier_table("openarm_rh56f1_bi") == {}
+    assert all(gen.mimic_multiplier_table(a) == {} for a in gen.SOURCES if not gen.is_rh56f1(a))
+
+
+def test_new_rh56f1_asset_inherits_v2_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    """10.19 사용자 "RH56F1 기본 = 2판 설정": 등록만 한 새 RH56F1 자산은 2판 표(손 충돌체 세분화·쥐는 범위 배율·
+    중복 collision 제거)를 그대로 받는다. 1판만 예외다."""
+    monkeypatch.setitem(gen.SOURCES, "openarm_rh56f1_bi_v9", gen.RH56F1_SOURCE)
+    assert gen.is_rh56f1("openarm_rh56f1_bi_v9")
+    assert gen.decomposition_table("openarm_rh56f1_bi_v9") == gen.decomposition_table("openarm_rh56f1_bi_v2")
+    assert gen.convex_decomposition_params("openarm_rh56f1_bi_v9") == gen.convex_decomposition_params("openarm_rh56f1_bi_v2")
+    assert gen.mimic_multiplier_table("openarm_rh56f1_bi_v9") == gen.RH56F1_DEFAULT_MIMIC_MULTIPLIER
+    assert gen.collision_drop_links("openarm_rh56f1_bi_v9") == gen.RH56F1_COLLISION_DROP_LINKS
+    assert gen.RH56F1_LEGACY_ASSETS == {"openarm_rh56f1_bi"}
 
 
 def test_rh56f1_v2_decomposition_params_explicit_mirrored_and_budgeted() -> None:
