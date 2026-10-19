@@ -26,10 +26,67 @@ collision_approximation:
   - head_camera
   convex_decomposition_links:
   - body_link
+  - l_hl_base
+  - l_hl_index_1
+  - l_hl_index_sensor
+  - l_hl_middle_1
+  - l_hl_middle_sensor
   - l_hl_palm_1
   - l_hl_palm_2
+  - l_hl_palm_3
+  - l_hl_pinky_1
+  - l_hl_pinky_sensor
+  - l_hl_ring_1
+  - l_hl_ring_sensor
+  - l_hl_thumb_2
+  - l_hl_thumb_3
+  - l_hl_thumb_sensor
+  - r_hl_base
+  - r_hl_index_1
+  - r_hl_index_sensor
+  - r_hl_middle_1
+  - r_hl_middle_sensor
   - r_hl_palm_1
   - r_hl_palm_2
+  - r_hl_palm_3
+  - r_hl_pinky_1
+  - r_hl_pinky_sensor
+  - r_hl_ring_1
+  - r_hl_ring_sensor
+  - r_hl_thumb_2
+  - r_hl_thumb_3
+  - r_hl_thumb_sensor
+  convex_decomposition_params:
+    l_hl_base: {shrinkWrap: true, errorPercentage: 5.0, maxConvexHulls: 16}
+    l_hl_index_1: {shrinkWrap: true, errorPercentage: 2.0, maxConvexHulls: 32, voxelResolution: 2000000}
+    l_hl_index_sensor: {shrinkWrap: true, errorPercentage: 5.0, maxConvexHulls: 8}
+    l_hl_middle_1: {shrinkWrap: true, errorPercentage: 2.0, maxConvexHulls: 32, voxelResolution: 2000000}
+    l_hl_middle_sensor: {shrinkWrap: true, errorPercentage: 5.0, maxConvexHulls: 8}
+    l_hl_palm_1: {shrinkWrap: true, errorPercentage: 2.0, maxConvexHulls: 32, voxelResolution: 2000000}
+    l_hl_palm_2: {shrinkWrap: true, errorPercentage: 2.0, maxConvexHulls: 32, voxelResolution: 2000000}
+    l_hl_palm_3: {shrinkWrap: true, errorPercentage: 5.0, maxConvexHulls: 16}
+    l_hl_pinky_1: {shrinkWrap: true, errorPercentage: 2.0, maxConvexHulls: 32, voxelResolution: 2000000}
+    l_hl_pinky_sensor: {shrinkWrap: true, errorPercentage: 5.0, maxConvexHulls: 8}
+    l_hl_ring_1: {shrinkWrap: true, errorPercentage: 2.0, maxConvexHulls: 32, voxelResolution: 2000000}
+    l_hl_ring_sensor: {shrinkWrap: true, errorPercentage: 5.0, maxConvexHulls: 8}
+    l_hl_thumb_2: {shrinkWrap: true, errorPercentage: 2.0, maxConvexHulls: 32, voxelResolution: 2000000}
+    l_hl_thumb_3: {shrinkWrap: true, errorPercentage: 2.0, maxConvexHulls: 32, voxelResolution: 2000000}
+    l_hl_thumb_sensor: {shrinkWrap: true, errorPercentage: 5.0, maxConvexHulls: 8}
+    r_hl_base: {shrinkWrap: true, errorPercentage: 5.0, maxConvexHulls: 16}
+    r_hl_index_1: {shrinkWrap: true, errorPercentage: 2.0, maxConvexHulls: 32, voxelResolution: 2000000}
+    r_hl_index_sensor: {shrinkWrap: true, errorPercentage: 5.0, maxConvexHulls: 8}
+    r_hl_middle_1: {shrinkWrap: true, errorPercentage: 2.0, maxConvexHulls: 32, voxelResolution: 2000000}
+    r_hl_middle_sensor: {shrinkWrap: true, errorPercentage: 5.0, maxConvexHulls: 8}
+    r_hl_palm_1: {shrinkWrap: true, errorPercentage: 2.0, maxConvexHulls: 32, voxelResolution: 2000000}
+    r_hl_palm_2: {shrinkWrap: true, errorPercentage: 2.0, maxConvexHulls: 32, voxelResolution: 2000000}
+    r_hl_palm_3: {shrinkWrap: true, errorPercentage: 5.0, maxConvexHulls: 16}
+    r_hl_pinky_1: {shrinkWrap: true, errorPercentage: 2.0, maxConvexHulls: 32, voxelResolution: 2000000}
+    r_hl_pinky_sensor: {shrinkWrap: true, errorPercentage: 5.0, maxConvexHulls: 8}
+    r_hl_ring_1: {shrinkWrap: true, errorPercentage: 2.0, maxConvexHulls: 32, voxelResolution: 2000000}
+    r_hl_ring_sensor: {shrinkWrap: true, errorPercentage: 5.0, maxConvexHulls: 8}
+    r_hl_thumb_2: {shrinkWrap: true, errorPercentage: 2.0, maxConvexHulls: 32, voxelResolution: 2000000}
+    r_hl_thumb_3: {shrinkWrap: true, errorPercentage: 2.0, maxConvexHulls: 32, voxelResolution: 2000000}
+    r_hl_thumb_sensor: {shrinkWrap: true, errorPercentage: 5.0, maxConvexHulls: 8}
 schema:
   body_root: stage-level root link with no geometry
   body_link: openarm physical base link
