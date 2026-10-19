@@ -916,6 +916,52 @@ HAND_LOCKED_JOINTS: dict[str, tuple[str, ...]] = {
 }
 
 
+#: ★2026-10-19 RH56F1 종속 마디 배율(사용자 결정 "쥐는 범위 맞춤"). PhysX mimic 은 관절 하나에
+#:   직선 하나(배율·오프셋)뿐이라 곡선인 실제 링크 연동을 **어느 구간에 맞출지** 골라야 한다.
+#: 근거: 벤더 연동표(vendor/RH56F1/*/参数资料/RH56F1行程与角度对应关系（含对比）.xlsx →
+#:   sim2real logs/rh56f1_probe_0930/rh56f1_mimic_table.npz)를 10.19 실기 쥐기 범위에서 원점 고정
+#:   최소제곱. 실측 _1 은 양손 6회 0.378~0.899 rad, thumb_2 0.085~0.149 rad
+#:   (sim2real logs/finger_meas/20261019_*_grip_*, report/s2r/s2r_rh56f1_grip_meas_1019b_eval.html).
+#:   - 네 손가락 _2: 맞춘 구간 _1 0.30~1.00 → 1.0268, 구간 안 최대 0.033 rad(손끝 1.3 mm).
+#:     벤더 URDF 1.1169 는 전 구간 맞춤이라 이 구간에서 끝마디를 0.04~0.07 rad 더 굽혔다(손끝 1.8~2.9 mm).
+#:     대가: _1 > 1.0(끝까지 쥠) 손끝 오차 6.6 → 12 mm.
+#:   - 엄지 thumb_3 = 1.2244 × thumb_2, thumb_4 = 0.8178 × thumb_3: thumb_2 0~0.25 rad 구간 최대 0.006 rad.
+#: 오프셋은 0 으로 둔다 — 음수 오프셋은 _1 이 작을 때 _2 하한 0 과 부딪히고, sim2real 배포 맵
+#:   (deploy/policy_control/config/rh56f1_hand_map.yaml mimic.k)은 배율만 받는다(같이 바꿀 것).
+#: _2 실측(사진 등)이 표와 3° 넘게 다르면 이 표를 실측으로 바꾼다.
+HAND_MIMIC_MULTIPLIER: dict[str, dict[str, float]] = {
+    "openarm_rh56f1_bi": {
+        r"[rl]_hj_(index|middle|ring|pinky)_2": 1.0268,
+        r"[rl]_hj_thumb_3": 1.2244,
+        r"[rl]_hj_thumb_4": 0.8178,
+    },
+}
+
+
+def apply_hand_mimic_multiplier(root: ET.Element, asset: str) -> list[str]:
+    """`HAND_MIMIC_MULTIPLIER` 로 종속 관절 `<mimic multiplier>` 를 바꾼다(원본·오프셋은 그대로).
+
+    패턴마다 좌우 짝이 모두 맞아야 하고, 대상이 mimic 관절이 아니면 빌드 에러다.
+    """
+    table = HAND_MIMIC_MULTIPLIER.get(asset)
+    if not table:
+        return []
+    done: list[str] = []
+    for pattern, multiplier in table.items():
+        hits = [j for j in root.findall("joint") if re.fullmatch(pattern, j.get("name") or "")]
+        if not hits or len(hits) % 2:
+            raise RuntimeError(f"{asset}: mimic 배율 대상 {pattern} 이 좌우 짝으로 없다: "
+                               f"{[j.get('name') for j in hits]}")
+        for joint in hits:
+            mimic = joint.find("mimic")
+            if mimic is None:
+                raise RuntimeError(f"{asset}: {joint.get('name')} 은 mimic 관절이 아니다")
+            old = mimic.get("multiplier")
+            mimic.set("multiplier", f"{multiplier:g}")
+            done.append(f"{joint.get('name')} {old} -> {multiplier:g}")
+    return done
+
+
 def lock_hand_joints(root: ET.Element, asset: str) -> list[str]:
     """`HAND_LOCKED_JOINTS` 의 관절을 **fixed 로 용접**한다(자유도 자체를 없앤다).
 
@@ -1457,6 +1503,8 @@ def generate_one(name: str, source_path: Path) -> tuple[Path, Path]:
     #   <limit> 을 다시 달아 임포터가 드라이브를 만든다.
     for _j in lock_hand_joints(root, name):
         print(f"[{name}] 관절 용접(fixed) {_j}")
+    for _m in apply_hand_mimic_multiplier(root, name):
+        print(f"[{name}] mimic 배율 {_m}")
     drop_addressing_frames(root)      # ★토큰 질량 부여 **전에** — 없앨 링크에 질량을 줄 이유가 없다
     give_massless_frames_token_mass(root)
     dropped = drop_duplicate_collisions(root, name)

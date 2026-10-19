@@ -643,6 +643,22 @@ def test_rh56f1_distal_collider_only_on_sensor() -> None:
         assert f"{s}_hl_palm_sensor" not in policy["convex_decomposition_links"]
 
 
+def test_rh56f1_mimic_multiplier_fit_to_grip_range() -> None:
+    """10.19 사용자 결정: 종속 마디 배율은 벤더 연동표를 실기 쥐기 범위에 맞춘 값(오프셋 0, 원본 관절 그대로)."""
+    want = {"index_2": ("index_1", 1.0268), "middle_2": ("middle_1", 1.0268), "ring_2": ("ring_1", 1.0268),
+            "pinky_2": ("pinky_1", 1.0268), "thumb_3": ("thumb_2", 1.2244), "thumb_4": ("thumb_3", 0.8178)}
+    joints = {j.get("name"): j for j in load_urdf("openarm_rh56f1_bi").findall("joint")}
+    for side in ("r", "l"):
+        for follower, (leader, k) in want.items():
+            mimic = joints[f"{side}_hj_{follower}"].find("mimic")
+            assert mimic is not None, follower
+            assert mimic.get("joint") == f"{side}_hj_{leader}"
+            assert float(mimic.get("multiplier")) == pytest.approx(k)
+            assert float(mimic.get("offset", "0")) == 0.0
+    # 다른 자산에는 손대지 않는다
+    assert set(gen.HAND_MIMIC_MULTIPLIER) == {"openarm_rh56f1_bi"}
+
+
 def test_rh56f1_decomposition_params_explicit_and_mirrored() -> None:
     """손 decomposition 링크는 파라미터를 모두 명시한다(API 없으면 PhysX 기본값이 맥락 따라 16·32조각). 좌우 같은 값."""
     params = load_manifest("openarm_rh56f1_bi")["collision_approximation"]["convex_decomposition_params"]
