@@ -147,3 +147,107 @@ openarm_rh56f1_bi_rl:
   # ★2026-09-15 no `thumb_abducted_open_fingers_open` pose: its body_link WARNs (raw 17~47mm clear) came from the
   #   inflated torso hull and would only have filtered fake contact. body_link is convexDecomposition instead
   #   (generate_rl_urdf.DECOMPOSITION_LINKS); verified with the thumb_1 sweep contact probe.
+
+# ★2026-10-19 RH56F1 2판(openarm_rh56f1_bi_v2_rl): 1판과 같은 구동 자세, 종속 마디만 새 배율로 다시 계산
+#   (index/middle/ring/pinky_2 = 1.0268 x _1, thumb_3 = 1.2244 x thumb_2, thumb_4 = 0.8178 x thumb_3 — generate_rl_urdf.HAND_MIMIC_MULTIPLIER).
+openarm_rh56f1_bi_v2_rl:
+  hand_half:
+    r_hj_index_1: 0.76428
+    r_hj_index_2: 0.78476
+    r_hj_middle_1: 0.76428
+    r_hj_middle_2: 0.78476
+    r_hj_ring_1: 0.76428
+    r_hj_ring_2: 0.78476
+    r_hj_pinky_1: 0.76428
+    r_hj_pinky_2: 0.78476
+    r_hj_thumb_1: 1.0472
+    r_hj_thumb_2: 0.23728
+    r_hj_thumb_3: 0.29053
+    r_hj_thumb_4: 0.2376
+    l_hj_index_1: 0.76428
+    l_hj_index_2: 0.78476
+    l_hj_middle_1: 0.76428
+    l_hj_middle_2: 0.78476
+    l_hj_ring_1: 0.76428
+    l_hj_ring_2: 0.78476
+    l_hj_pinky_1: 0.76428
+    l_hj_pinky_2: 0.78476
+    l_hj_thumb_1: 1.0472
+    l_hj_thumb_2: 0.23728
+    l_hj_thumb_3: 0.29053
+    l_hj_thumb_4: 0.2376
+  fingers_closed_thumb_open:
+    r_hj_index_1: 1.52856
+    r_hj_index_2: 1.56953
+    r_hj_middle_1: 1.52856
+    r_hj_middle_2: 1.56953
+    r_hj_ring_1: 1.52856
+    r_hj_ring_2: 1.56953
+    r_hj_pinky_1: 1.52856
+    r_hj_pinky_2: 1.56953
+    r_hj_thumb_1: 0.0
+    r_hj_thumb_2: 0.0
+    r_hj_thumb_3: 0.0
+    r_hj_thumb_4: 0.0
+    l_hj_index_1: 1.52856
+    l_hj_index_2: 1.56953
+    l_hj_middle_1: 1.52856
+    l_hj_middle_2: 1.56953
+    l_hj_ring_1: 1.52856
+    l_hj_ring_2: 1.56953
+    l_hj_pinky_1: 1.52856
+    l_hj_pinky_2: 1.56953
+    l_hj_thumb_1: 0.0
+    l_hj_thumb_2: 0.0
+    l_hj_thumb_3: 0.0
+    l_hj_thumb_4: 0.0
+  thumb_closed_fingers_open:
+    r_hj_index_1: 0.0
+    r_hj_index_2: 0.0
+    r_hj_middle_1: 0.0
+    r_hj_middle_2: 0.0
+    r_hj_ring_1: 0.0
+    r_hj_ring_2: 0.0
+    r_hj_pinky_1: 0.0
+    r_hj_pinky_2: 0.0
+    r_hj_thumb_1: 0.0
+    r_hj_thumb_2: 0.47456
+    r_hj_thumb_3: 0.58105
+    r_hj_thumb_4: 0.47518
+    l_hj_index_1: 0.0
+    l_hj_index_2: 0.0
+    l_hj_middle_1: 0.0
+    l_hj_middle_2: 0.0
+    l_hj_ring_1: 0.0
+    l_hj_ring_2: 0.0
+    l_hj_pinky_1: 0.0
+    l_hj_pinky_2: 0.0
+    l_hj_thumb_1: 0.0
+    l_hj_thumb_2: 0.47456
+    l_hj_thumb_3: 0.58105
+    l_hj_thumb_4: 0.47518
+  thumb_abducted_closed_fingers_open:
+    r_hj_index_1: 0.0
+    r_hj_index_2: 0.0
+    r_hj_middle_1: 0.0
+    r_hj_middle_2: 0.0
+    r_hj_ring_1: 0.0
+    r_hj_ring_2: 0.0
+    r_hj_pinky_1: 0.0
+    r_hj_pinky_2: 0.0
+    r_hj_thumb_1: 2.0944
+    r_hj_thumb_2: 0.47456
+    r_hj_thumb_3: 0.58105
+    r_hj_thumb_4: 0.47518
+    l_hj_index_1: 0.0
+    l_hj_index_2: 0.0
+    l_hj_middle_1: 0.0
+    l_hj_middle_2: 0.0
+    l_hj_ring_1: 0.0
+    l_hj_ring_2: 0.0
+    l_hj_pinky_1: 0.0
+    l_hj_pinky_2: 0.0
+    l_hj_thumb_1: 2.0944
+    l_hj_thumb_2: 0.47456
+    l_hj_thumb_3: 0.58105
+    l_hj_thumb_4: 0.47518

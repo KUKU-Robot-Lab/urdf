@@ -153,7 +153,10 @@ RH56F1_COLLISION_DROP_LINKS = frozenset(
     for side in ("r", "l")
     for link in ("thumb_4", "thumb_tip", *(f"{f}_{k}" for f in ("index", "middle", "ring", "pinky") for k in ("2", "tip")))
 )
-COLLISION_DROP_LINKS: dict[str, frozenset[str]] = {"openarm_rh56f1_bi": RH56F1_COLLISION_DROP_LINKS}
+COLLISION_DROP_LINKS: dict[str, frozenset[str]] = {
+    "openarm_rh56f1_bi": RH56F1_COLLISION_DROP_LINKS,
+    "openarm_rh56f1_bi_v2": RH56F1_COLLISION_DROP_LINKS,
+}
 
 
 def drop_duplicate_collisions(root: ET.Element, asset: str) -> list[str]:
@@ -190,19 +193,33 @@ def drop_duplicate_collisions(root: ET.Element, asset: str) -> list[str]:
 #     base(손목)     hull 8.5 / 18.5      → 16조각                  2.5 / 6.1
 #   thumb_1(1.5 / 2.6)·palm_sensor(0.1 / 0.2)는 hull 이 이미 정확해 그대로 둔다.
 #   API 를 쓰지 않으면 PhysX 기본값(같은 메시가 맥락 따라 16·32조각)으로 구워져 재현성이 없으므로 값을 명시한다.
-#   조각 수가 형상 수다(09.09 손 전체 기본 분해 = 731개 중 710개 → 접촉 버퍼 넘침). 이 표로 손 하나 47 → 330.
-_DECOMP_FINE = {"shrinkWrap": True, "errorPercentage": 2.0, "maxConvexHulls": 32, "voxelResolution": 2_000_000}
-_DECOMP_MID = {"shrinkWrap": True, "errorPercentage": 5.0, "maxConvexHulls": 16}
+#   조각 수가 형상 수다(09.09 손 전체 기본 분해 = 731개 중 710개 → 접촉 버퍼 넘침).
+# ★2026-10-19 범위 확정 (사용자: "링크 1번들까지도 지금 필요", "1번 링크도 collision 세부적으로 cad랑 동일하게"):
+#   위 표 전부(손가락 조각 손당 233)는 4096 env 에서 RTX 3090 24 GB 를 넘겨 PhysX CUDA 오류로 장면이 깨졌다.
+#   → 쥐는 면인 손끝(_sensor) + 네 손가락 첫 마디(_1)만 나누고, palm_1·2 는 1판 그대로(기본 분해),
+#     나머지(palm_3·base·thumb_2·3)는 hull 로 둔다.
+#   첫 마디 조각 수(4096 env, RTX 3090 24 GB, rh_aglt 행동 0 300 스텝, 1판 14.3 GB · 218 ms):
+#     16조각(오차 5 %)            부풂 p95 1.5 / 최대 3.8 mm · 20.5 GB · 311 ms  ← 채택
+#     32조각(오차 2 %·복셀 2M)    부풂 p95 1.0 / 최대 2.4 mm · 21.4 GB 뒤 3.5 GB 할당 실패(CUDA 오류)
+#   16조각도 CAD 처럼 판 두 장 사이 홈을 비운다(한 덩어리는 홈을 메워 p95 2.2 / 최대 4.5 mm).
+#   실측·그림: report/grasp/grasp_rh56f1_asset_v2_1019b_eli5.html.
 _DECOMP_TIP = {"shrinkWrap": True, "errorPercentage": 5.0, "maxConvexHulls": 8}
+_DECOMP_PHALANX = {"shrinkWrap": True, "errorPercentage": 5.0, "maxConvexHulls": 16}
 _RH56F1_HAND_DECOMPOSITION: dict[str, dict] = {
-    "palm_1": _DECOMP_FINE, "palm_2": _DECOMP_FINE, "palm_3": _DECOMP_MID, "base": _DECOMP_MID,
-    "thumb_2": _DECOMP_FINE, "thumb_3": _DECOMP_FINE, "thumb_sensor": _DECOMP_TIP,
-    **{f"{f}_1": _DECOMP_FINE for f in ("index", "middle", "ring", "pinky")},
+    "palm_1": {}, "palm_2": {},   # 1판과 같은 PhysX 기본 분해(09.15 palm_sensor 접촉 예외)
+    "thumb_sensor": _DECOMP_TIP,
     **{f"{f}_sensor": _DECOMP_TIP for f in ("index", "middle", "ring", "pinky")},
+    **{f"{f}_1": _DECOMP_PHALANX for f in ("index", "middle", "ring", "pinky")},
 }
 # 링크 → PhysxConvexDecompositionCollisionAPI 값. 빈 dict = API 를 쓰지 않는다(PhysX 기본값, body_link 의 09.15 동작 유지).
+#   ★10.19 사용자 결정 "새 경로": 위 표는 새 자산 `openarm_rh56f1_bi_v2` 에만 쓴다. `openarm_rh56f1_bi` 는 배포된
+#   정책 12개(sim2real contract_assets)가 hdgp 의 그 URDF 로 손끝 FK 를 하므로 09.15 설정(palm_1·2 기본 분해)을 유지한다.
 DECOMPOSITION_LINKS: dict[str, dict[str, dict]] = {
     "openarm_rh56f1_bi": {
+        "body_link": {},
+        **{f"{side}_hl_{link}": {} for side in ("r", "l") for link in ("palm_1", "palm_2")},
+    },
+    "openarm_rh56f1_bi_v2": {
         "body_link": {},
         **{f"{side}_hl_{link}": dict(params) for side in ("r", "l") for link, params in _RH56F1_HAND_DECOMPOSITION.items()},
     },
@@ -256,6 +273,7 @@ def convex_hull_links(root: ET.Element) -> list[str]:
 #                         the driver copies - see tools/gen_dg5f_short_xacro.py.
 #     openarm_dg5f-s_bi   Tesollo DG-5F-S (vendor/tesollo_model dg5fs),          both hands
 #     openarm_rh56f1_bi   Inspire RH56F1,                                        both hands
+#     openarm_rh56f1_bi_v2  Inspire RH56F1 2판(10.19 손 충돌체 decomposition·mimic 배율), both hands
 #     openarm_gripper_bi  stock OpenArm 2-finger gripper (openarm_hand),         both hands
 #                         (source made by tools/gen_gripper_bi_source.sh)
 #   The pre-09.05 assets (openarm_tesollo_sensor / openarm_tesollo_bi / openarm_tesollo_bi_s /
@@ -271,6 +289,10 @@ SOURCES = OrderedDict(
         ("openarm_dg5f-m-short-tl_bi", ROOT / "generated" / "source" / "openarm_tesollo_bi_short.urdf"),
         ("openarm_dg5f-s_bi", ROOT / "generated" / "source" / "openarm_tesollo_bi_s.urdf"),
         ("openarm_rh56f1_bi", ROOT / "generated" / "source" / "openarm_bi_rh56f1.urdf"),
+        # ★10.19 RH56F1 2판 — 같은 소스. 손 충돌체 decomposition 확대 + 종속 마디 mimic 배율을 실기 쥐기 범위에 맞춤.
+        #   왜 별 자산인가: 배포된 RH56F1 정책 12개가 hdgp 의 openarm_rh56f1_bi_rl URDF 로 손끝 FK 를 하므로
+        #   그 경로를 바꾸면 학습 때와 관측이 달라진다(사용자 결정 "새 경로").
+        ("openarm_rh56f1_bi_v2", ROOT / "generated" / "source" / "openarm_bi_rh56f1.urdf"),
         ("openarm_gripper_bi", ROOT / "generated" / "source" / "openarm_gripper_bi.urdf"),
     ]
 )
@@ -892,6 +914,7 @@ def _spec_from_deg(table: dict[str, tuple[float, float]]) -> dict[str, tuple[flo
 HAND_JOINT_SPEC: dict[str, dict[str, tuple[float, float]] | None] = {
     # 벤더 Isaac USD 를 대조하지 않은 자산 — None 이면 벤더 URDF 값을 그대로 둔다.
     "openarm_rh56f1_bi": None,        # Inspire — Tesollo 자산이 아니다
+    "openarm_rh56f1_bi_v2": None,     # 같은 손(RH56F1 2판)
     "openarm_gripper_bi": None,       # 스톡 2지 그리퍼 — 손이 아니다
     "openarm_dg5f-m_bi": _spec_from_deg(_DG5F_M_RANGE_DEG),
     "openarm_dg5f-m-short_bi": _spec_from_deg(_DG5F_M_RANGE_DEG),
@@ -916,7 +939,7 @@ HAND_LOCKED_JOINTS: dict[str, tuple[str, ...]] = {
 }
 
 
-#: ★2026-10-19 RH56F1 종속 마디 배율(사용자 결정 "쥐는 범위 맞춤"). PhysX mimic 은 관절 하나에
+#: ★2026-10-19 RH56F1 종속 마디 배율(사용자 결정 "쥐는 범위 맞춤", 새 자산 openarm_rh56f1_bi_v2 에만). PhysX mimic 은 관절 하나에
 #:   직선 하나(배율·오프셋)뿐이라 곡선인 실제 링크 연동을 **어느 구간에 맞출지** 골라야 한다.
 #: 근거: 벤더 연동표(vendor/RH56F1/*/参数资料/RH56F1行程与角度对应关系（含对比）.xlsx →
 #:   sim2real logs/rh56f1_probe_0930/rh56f1_mimic_table.npz)를 10.19 실기 쥐기 범위에서 원점 고정
@@ -930,7 +953,7 @@ HAND_LOCKED_JOINTS: dict[str, tuple[str, ...]] = {
 #:   (deploy/policy_control/config/rh56f1_hand_map.yaml mimic.k)은 배율만 받는다(같이 바꿀 것).
 #: _2 실측(사진 등)이 표와 3° 넘게 다르면 이 표를 실측으로 바꾼다.
 HAND_MIMIC_MULTIPLIER: dict[str, dict[str, float]] = {
-    "openarm_rh56f1_bi": {
+    "openarm_rh56f1_bi_v2": {
         r"[rl]_hj_(index|middle|ring|pinky)_2": 1.0268,
         r"[rl]_hj_thumb_3": 1.2244,
         r"[rl]_hj_thumb_4": 0.8178,

@@ -158,7 +158,7 @@ def test_other_hands_keep_vendor_mass(name: str) -> None:
     #   여기 값이 갈리면 용접이 링크를 병합했다는 뜻이라 실패해야 맞다.
     vendor = {"openarm_dg5f-m-short_bi": 1.5700, "openarm_dg5f-m-short-tl_bi": 1.5700,
               "openarm_dg5f-s_bi": 1.2084,
-              "openarm_rh56f1_bi": 0.7077, "openarm_gripper_bi": 0.4222}
+              "openarm_rh56f1_bi": 0.7077, "openarm_rh56f1_bi_v2": 0.7077, "openarm_gripper_bi": 0.4222}
     for side in ("r", "l"):
         assert hand_mass_kg(root, side) == pytest.approx(vendor[name], abs=2e-3)
 
@@ -618,10 +618,20 @@ def test_short_flange_adapter_is_present_and_declared_non_vendor() -> None:
         assert z == pytest.approx(0.010, abs=1e-9), (side, z)
 
 
-def test_rh56f1_distal_collider_only_on_sensor() -> None:
+RH56F1_V1_HAND_DECOMP = ("palm_1", "palm_2")
+#: ★10.19 2판 손당 조각 상한. 손 링크를 모두 나눈 판(손당 233)과 첫 마디 32조각 판(손당 168)은 4096 env 에서
+#: RTX 3090 24 GB 를 넘겨 PhysX CUDA 오류로 장면이 깨졌다(1판 14.3 GB). 손끝 8 x 5 + 첫 마디 16 x 4 = 104 는 20.5 GB.
+#: 조각 수가 곧 env 당 형상 수다.
+RH56F1_V2_HULL_BUDGET_PER_HAND = 104
+#: 2판에서 나누는 손 링크(사용자 10.19: 손끝 + 네 손가락 첫 마디). palm_1·2 는 1판처럼 기본 분해(파라미터 없음).
+RH56F1_V2_FINGER_DECOMP = ("thumb_sensor", *(f"{f}_{k}" for f in ("index", "middle", "ring", "pinky") for k in ("1", "sensor")))
+
+
+@pytest.mark.parametrize("name", ["openarm_rh56f1_bi", "openarm_rh56f1_bi_v2"])
+def test_rh56f1_distal_collider_only_on_sensor(name: str) -> None:
     """RH56F1 `{f}_2` / `_force_sensor` / `_tip` share one vendor solid; only `_sensor` keeps the collider
-    (hdgp contact sensors read it). palm_1/palm_2 are the only decomposition links (they covered the pad)."""
-    root = load_urdf("openarm_rh56f1_bi")
+    (hdgp contact sensors read it). 1판은 palm_1/palm_2 만 decomposition, 2판은 decomposition 표 전체."""
+    root = load_urdf(name)
     has_col = {link.get("name"): bool(link.findall("collision")) for link in root.findall("link")}
     for side in ("r", "l"):
         for finger in ("thumb", "index", "middle", "ring", "pinky"):
@@ -630,10 +640,9 @@ def test_rh56f1_distal_collider_only_on_sensor() -> None:
         assert not has_col[f"{side}_hl_thumb_4"]
         assert not any(has_col[f"{side}_hl_{f}_2"] for f in ("index", "middle", "ring", "pinky"))
         assert has_col[f"{side}_hl_palm_sensor"] and has_col[f"{side}_hl_thumb_3"]
-    policy = load_manifest("openarm_rh56f1_bi")["collision_approximation"]
+    policy = load_manifest(name)["collision_approximation"]
     assert policy["default"] == "convex_hull"
-    hand = ["palm_1", "palm_2", "palm_3", "base", "thumb_2", "thumb_3", "thumb_sensor",
-            *(f"{f}_{k}" for f in ("index", "middle", "ring", "pinky") for k in ("1", "sensor"))]
+    hand = RH56F1_V1_HAND_DECOMP if name == "openarm_rh56f1_bi" else tuple(gen._RH56F1_HAND_DECOMPOSITION)
     assert sorted(policy["convex_decomposition_links"]) == sorted(
         ["body_link", *(f"{s}_hl_{p}" for s in ("r", "l") for p in hand)])
     assert "body_link" not in policy["convex_hull_links"]
@@ -643,11 +652,23 @@ def test_rh56f1_distal_collider_only_on_sensor() -> None:
         assert f"{s}_hl_palm_sensor" not in policy["convex_decomposition_links"]
 
 
-def test_rh56f1_mimic_multiplier_fit_to_grip_range() -> None:
-    """10.19 사용자 결정: 종속 마디 배율은 벤더 연동표를 실기 쥐기 범위에 맞춘 값(오프셋 0, 원본 관절 그대로)."""
+def test_rh56f1_v1_keeps_vendor_mimic_and_default_decomposition() -> None:
+    """1판은 배포된 정책 12개의 손끝 FK 기준이라 벤더 mimic 배율·PhysX 기본 분해를 그대로 둔다."""
+    joints = {j.get("name"): j for j in load_urdf("openarm_rh56f1_bi").findall("joint")}
+    vendor = {"index_2": 1.1169, "middle_2": 1.1169, "ring_2": 1.1169, "pinky_2": 1.1169,
+              "thumb_3": 1.1425, "thumb_4": 0.7508}
+    for side in ("r", "l"):
+        for follower, k in vendor.items():
+            assert float(joints[f"{side}_hj_{follower}"].find("mimic").get("multiplier")) == pytest.approx(k)
+    assert "convex_decomposition_params" not in load_manifest("openarm_rh56f1_bi")["collision_approximation"]
+    assert gen.convex_decomposition_params("openarm_rh56f1_bi") == {}
+
+
+def test_rh56f1_v2_mimic_multiplier_fit_to_grip_range() -> None:
+    """10.19 사용자 결정: 2판 종속 마디 배율은 벤더 연동표를 실기 쥐기 범위에 맞춘 값(오프셋 0, 원본 관절 그대로)."""
     want = {"index_2": ("index_1", 1.0268), "middle_2": ("middle_1", 1.0268), "ring_2": ("ring_1", 1.0268),
             "pinky_2": ("pinky_1", 1.0268), "thumb_3": ("thumb_2", 1.2244), "thumb_4": ("thumb_3", 0.8178)}
-    joints = {j.get("name"): j for j in load_urdf("openarm_rh56f1_bi").findall("joint")}
+    joints = {j.get("name"): j for j in load_urdf("openarm_rh56f1_bi_v2").findall("joint")}
     for side in ("r", "l"):
         for follower, (leader, k) in want.items():
             mimic = joints[f"{side}_hj_{follower}"].find("mimic")
@@ -655,17 +676,19 @@ def test_rh56f1_mimic_multiplier_fit_to_grip_range() -> None:
             assert mimic.get("joint") == f"{side}_hj_{leader}"
             assert float(mimic.get("multiplier")) == pytest.approx(k)
             assert float(mimic.get("offset", "0")) == 0.0
-    # 다른 자산에는 손대지 않는다
-    assert set(gen.HAND_MIMIC_MULTIPLIER) == {"openarm_rh56f1_bi"}
+    # 다른 자산(1판 포함)에는 손대지 않는다
+    assert set(gen.HAND_MIMIC_MULTIPLIER) == {"openarm_rh56f1_bi_v2"}
 
 
-def test_rh56f1_decomposition_params_explicit_and_mirrored() -> None:
-    """손 decomposition 링크는 파라미터를 모두 명시한다(API 없으면 PhysX 기본값이 맥락 따라 16·32조각). 좌우 같은 값."""
-    params = load_manifest("openarm_rh56f1_bi")["collision_approximation"]["convex_decomposition_params"]
+def test_rh56f1_v2_decomposition_params_explicit_mirrored_and_budgeted() -> None:
+    """2판에서 새로 나누는 손가락 링크(손끝·첫 마디)는 파라미터를 모두 명시하고(API 없으면 PhysX 기본값이 맥락 따라
+    16·32조각), 좌우 같은 값이며, 손당 조각 수가 상한 안이다. palm_1·2 는 1판과 같은 기본 분해다."""
+    params = load_manifest("openarm_rh56f1_bi_v2")["collision_approximation"]["convex_decomposition_params"]
     assert "body_link" not in params  # 09.15 동작(PhysX 기본값) 유지
-    hand = {link for link in load_manifest("openarm_rh56f1_bi")["collision_approximation"]["convex_decomposition_links"]
+    hand = {link for link in load_manifest("openarm_rh56f1_bi_v2")["collision_approximation"]["convex_decomposition_links"]
             if link != "body_link"}
-    assert set(params) == hand
+    assert hand == {f"{s}_hl_{p}" for s in ("r", "l") for p in (*RH56F1_V1_HAND_DECOMP, *RH56F1_V2_FINGER_DECOMP)}
+    assert set(params) == {f"{s}_hl_{p}" for s in ("r", "l") for p in RH56F1_V2_FINGER_DECOMP}
     for link, values in params.items():
         assert values["shrinkWrap"] is True, link
         assert 1 <= values["maxConvexHulls"] <= 32, link
@@ -673,5 +696,7 @@ def test_rh56f1_decomposition_params_explicit_and_mirrored() -> None:
         if link.startswith("r_hl_"):
             assert params["l_hl_" + link[5:]] == values, link
     assert params["r_hl_index_sensor"]["maxConvexHulls"] == 8
-    assert params["r_hl_index_1"]["maxConvexHulls"] == 32
-    assert gen.convex_decomposition_params("openarm_rh56f1_bi") == params
+    assert params["r_hl_index_1"]["maxConvexHulls"] == 16
+    per_hand = sum(v["maxConvexHulls"] for k, v in params.items() if k.startswith("r_hl_"))
+    assert per_hand <= RH56F1_V2_HULL_BUDGET_PER_HAND  # 손 링크 decomposition 조각 상한(hull 링크 2개 별도)
+    assert gen.convex_decomposition_params("openarm_rh56f1_bi_v2") == params

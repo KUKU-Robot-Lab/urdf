@@ -321,6 +321,10 @@ ASSET_BUILDS: dict[str, AssetBuild] = {
     "openarm_rh56f1_bi_rl": AssetBuild(
         hand_drive="mimic", gain_sources=(ARM_DRIVER_GAINS, RH56F1_HAND_DRIVE_GAINS),
         mimic_natural_frequency=0.0),
+    # RH56F1 2판(10.19): 같은 손, 충돌체 decomposition 확대·mimic 배율 조정. 구동·mimic 강성은 1판과 같다.
+    "openarm_rh56f1_bi_v2_rl": AssetBuild(
+        hand_drive="mimic", gain_sources=(ARM_DRIVER_GAINS, RH56F1_HAND_DRIVE_GAINS),
+        mimic_natural_frequency=0.0),
     # Stock gripper: one motor drives both jaws (URDF finger_joint2 mimics
     # finger_joint1) -> PhysX mimic; only *_hj_gripper_1 is commandable.
     "openarm_gripper_bi_rl": AssetBuild(
