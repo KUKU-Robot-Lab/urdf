@@ -261,8 +261,12 @@ def test_manifest_collider_policy(name: str) -> None:
         assert reason.strip(), f"{name}: 벤더 이탈에는 사유가 필요하다"
 
     # OpenArm 제작 링크(몸통·팔·머리·스톡 그리퍼)는 어느 자산에서든 hull 이다.
+    # 예외: RH56F1 body_link 는 09.15 사용자 결정으로 decomposition(가짜 몸통 hull 접촉) —
+    # convex_decomposition_links 에 명시돼 있으면 hull 목록에 없어도 된다.
     hull = set(policy["convex_hull_links"])
-    assert {"body_link", "r_al_1", "l_al_7", "head_base"} <= hull
+    decomp = set(policy.get("convex_decomposition_links") or [])
+    assert {"r_al_1", "l_al_7", "head_base"} <= hull
+    assert "body_link" in hull | decomp
     assert all(link.startswith(gen.OPENARM_HULL_LINK_PREFIXES) for link in hull)
     if "gripper" in name:
         assert {"r_hl_gripper_base", "l_hl_gripper_left_finger"} <= hull

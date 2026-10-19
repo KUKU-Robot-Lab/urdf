@@ -18,6 +18,11 @@ code so they can never drift from what the asset pipeline assumes:
   sees them too, and mirrored meshes (the vendor's left-arm scale
   "0.001 -0.001 0.001") are baked into positive scale + mirrored points
   (`bake_mirrored_scales`) because Newton's MuJoCo solver rejects them.
+  Links in the manifest's `convex_decomposition_links` do not ship as
+  convexDecomposition: the build asks PhysX for that decomposition once and
+  writes each hull as its own convexHull Mesh (`bake_decomposition_hulls`), so
+  PhysX keeps its geometry and Newton (which re-splits decomposition meshes
+  with CoACD at every launch) loads the same pieces.
 - merge_fixed_joints False: the historical GUI imports did NOT merge. Measured
   on the previous openarm_tesollo_bi_s_rl USD: 77 rigid bodies including every
   `*_hl_palm` and `*_tip`. Merging drops 20 bodies, and hdgp addresses them by
@@ -84,7 +89,7 @@ import json  # noqa: E402
 import yaml  # noqa: E402
 from isaaclab.sim.converters import UrdfConverter, UrdfConverterCfg  # noqa: E402
 import numpy as np  # noqa: E402
-from pxr import Gf, PhysxSchema, Usd, UsdGeom, UsdPhysics, Vt  # noqa: E402
+from pxr import Gf, PhysicsSchemaTools, PhysxSchema, Sdf, Usd, UsdGeom, UsdPhysics, UsdUtils, Vt  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 RL_DIR = ROOT / "generated" / "rl"
@@ -465,6 +470,7 @@ def convert(asset: str) -> Path:
     if decomp_links:
         override_link_approximation(usd_path, asset, decomp_links, "convexDecomposition", decomp_params)
     move_colliders_to_meshes(usd_path, asset)
+    baked = bake_decomposition_hulls(usd_path, asset, decomp_links, decomp_params) if decomp_links else {}
     verify_colliders_on_gprims(usd_path, asset)
     verify_no_mirrored_xforms(usd_path, asset)
     rgb_frame = (manifest.get("camera_view_frame") or {}).get("rgb_lens_usd_frame")
@@ -472,10 +478,12 @@ def convert(asset: str) -> Path:
         raise SystemExit(f"[{asset}] manifest camera_view_frame has no rgb_lens_usd_frame - regenerate the URDF")
     _RGB_FRAME[asset] = rgb_frame
     # ★head 검증은 sync 후로 옮겼다 — 참조가 상대경로라 hdgp 배치에서만 해석된다.
+    # decomposition links now carry the baked PhysX hulls (convexHull meshes); their recipe is
+    # checked on the hulls' provenance by verify_baked_hulls.
     verify_contract(usd_path, manifest, asset, urdf_path, want=APPROX_TOKEN[collider_type],
-                    per_link_want={**{l: "convexHull" for l in hull_links},
-                                   **{l: "convexDecomposition" for l in decomp_links}},
-                    per_link_params=decomp_params)
+                    per_link_want={l: "convexHull" for l in hull_links + decomp_links})
+    if baked:
+        verify_baked_hulls(usd_path, asset, decomp_params, baked)
     patch_and_verify_mimic_joints(usd_path, asset, urdf_path)
     apply_collision_filters(usd_path, urdf_path, asset,
                             [tuple(p) for p in manifest["self_collision_filtered_pairs"]])
@@ -977,6 +985,186 @@ def move_colliders_to_meshes(usd_path: Path, asset: str) -> None:
                 prop.SetTargets([])
     stage.GetRootLayer().Save()
     print(f"[{asset}] collider APIs moved from {len(sources)} Xforms onto {moved_shapes} meshes")
+
+
+# ★2026-10-19 (newton session report). Newton reads `convexDecomposition` colliders as "split
+# this mesh with CoACD at every launch" (threshold 0.05, PhysX's maxConvexHulls ignored): the
+# 23 RH56F1 2판 decomposition meshes became 6952-7005 shapes per env, a different count every
+# launch, 65 slivers < 0.001 mm^3, and MuJoCo refused a 3-point planar piece of l_hl_pinky_1
+# ("does not support planar mesh collider") and an l_hl_palm_1 piece ("mesh volume is too
+# small"). PhysX itself cooks the same meshes into 284 hulls, identical on repeat (measured
+# in place on the built USD: thinnest 0.79 mm, smallest 2.8 mm^3). So the build asks PhysX for
+# that decomposition once and writes each hull as its own convexHull Mesh: PhysX re-hulls a
+# convex hull into itself (same geometry as before), Newton gets the same pieces, every launch.
+_BAKED_FROM_ATTR = "openarm:bakedFromDecomposition"   # JSON: source mesh, recipe, hull index/count
+_COOK_WAIT_UPDATES = 600
+_HULL_VERTEX_LIMIT = 64          # PhysX's own per-hull limit (decomposition and hull default)
+_MIN_HULL_THICKNESS_M = 1e-4     # below this a piece is a sliver: MuJoCo rejects planar meshes
+_MIN_HULL_VOLUME_M3 = 1e-12      # 0.001 mm^3 - MuJoCo "mesh volume is too small"
+
+
+def _cook_decomposition(cook, stage_id: int, path: Sdf.Path) -> list[tuple[np.ndarray, list[list[int]]]]:
+    """PhysX's convex decomposition of one collider: per hull (vertices, polygons) in the mesh's point space."""
+    box: dict = {}
+
+    def on_result(result, convexes) -> None:
+        box["result"] = result
+        box["hulls"] = [
+            (np.array([[v[0], v[1], v[2]] for v in c.vertices], dtype=np.float64),
+             [[int(i) for i in c.indices[p.index_base:p.index_base + p.num_vertices]] for p in c.polygons])
+            for c in convexes]
+
+    cook.request_convex_collision_representation(
+        stage_id=stage_id, collision_prim_id=PhysicsSchemaTools.sdfPathToInt(path),
+        run_asynchronously=False, on_result=on_result)
+    for _ in range(_COOK_WAIT_UPDATES):
+        if "result" in box:
+            break
+        simulation_app.update()
+    if not str(box.get("result")).endswith("RESULT_VALID") or not box.get("hulls"):
+        raise SystemExit(f"PhysX could not cook the decomposition of {path}: {box.get('result')}")
+    return box["hulls"]
+
+
+def _hull_triangles(vertices: np.ndarray, polygons: list[list[int]]) -> list[int]:
+    """Fan-triangulate PhysX's hull polygons with every face wound outward (normal away from the centroid)."""
+    centroid = vertices.mean(axis=0)
+    out: list[int] = []
+    for poly in polygons:
+        if len(poly) < 3:
+            raise SystemExit(f"hull polygon with {len(poly)} vertices")
+        pts = vertices[poly]
+        normal = np.cross(pts, np.roll(pts, -1, axis=0)).sum(axis=0)   # Newell
+        if float(np.dot(normal, pts.mean(axis=0) - centroid)) < 0:
+            poly = poly[::-1]
+        for k in range(1, len(poly) - 1):
+            out.extend((poly[0], poly[k], poly[k + 1]))
+    return out
+
+
+def _author_hull(stage: Usd.Stage, source: Usd.Prim, index: int, vertices: np.ndarray,
+                 triangles: list[int], provenance: str) -> Usd.Prim:
+    """One baked hull as a convexHull Mesh sibling of `source`, in the same frame, with its collider settings."""
+    mesh = UsdGeom.Mesh.Define(stage, source.GetParent().GetPath().AppendChild(f"{source.GetName()}_hull{index:02d}"))
+    prim = mesh.GetPrim()
+    local = _local_xform(source)
+    if not np.allclose(np.array(local), np.eye(4), atol=1e-12):
+        UsdGeom.Xformable(mesh).MakeMatrixXform().Set(local)
+    mesh.GetPointsAttr().Set(Vt.Vec3fArray([Gf.Vec3f(*map(float, v)) for v in vertices]))
+    mesh.GetFaceVertexCountsAttr().Set(Vt.IntArray([3] * (len(triangles) // 3)))
+    mesh.GetFaceVertexIndicesAttr().Set(Vt.IntArray(triangles))
+    mesh.GetExtentAttr().Set(Vt.Vec3fArray([Gf.Vec3f(*map(float, vertices.min(axis=0))),
+                                            Gf.Vec3f(*map(float, vertices.max(axis=0)))]))
+    mesh.GetSubdivisionSchemeAttr().Set(UsdGeom.Tokens.none)
+    for name in ("purpose", "visibility"):
+        attr = source.GetAttribute(name)
+        if attr and attr.HasAuthoredValue():
+            prim.GetAttribute(name).Set(attr.Get())
+    for schema in source.GetAppliedSchemas():
+        if "ConvexDecomposition" not in schema:
+            prim.AddAppliedSchema(schema)
+    for prop in source.GetAuthoredProperties():
+        name = prop.GetName()
+        if not name.startswith(_PHYSICS_PROPERTY_PREFIXES + ("material:binding",)) \
+                or name.startswith("physxConvexDecompositionCollision:"):
+            continue
+        if isinstance(prop, Usd.Attribute):
+            prim.CreateAttribute(name, prop.GetTypeName(), prop.IsCustom()).Set(prop.Get())
+        else:
+            prim.CreateRelationship(name, prop.IsCustom()).SetTargets(prop.GetTargets())
+    UsdPhysics.MeshCollisionAPI(prim).GetApproximationAttr().Set("convexHull")
+    PhysxSchema.PhysxConvexHullCollisionAPI.Apply(prim).GetHullVertexLimitAttr().Set(_HULL_VERTEX_LIMIT)
+    prim.CreateAttribute(_BAKED_FROM_ATTR, Sdf.ValueTypeNames.String, custom=True).Set(provenance)
+    return prim
+
+
+def bake_decomposition_hulls(usd_path: Path, asset: str, links: list[str],
+                             params: dict[str, dict]) -> dict[str, int]:
+    """Replace every convexDecomposition collider under `links` by the hulls PhysX cooks from it.
+
+    Cooked in place on the composed robot (root layer de-instanced by move_colliders_to_meshes),
+    so the decomposition is the one training used; the source mesh is deactivated and keeps
+    its decomposition API as the recipe. Returns hull counts per link.
+    """
+    from omni.physx import get_physx_cooking_interface   # Kit extension: only inside the running app
+
+    stage = Usd.Stage.Open(str(usd_path))
+    root_path = stage.GetDefaultPrim().GetPath()
+    cache = UsdUtils.StageCache.Get()
+    cache_id = cache.Insert(stage)
+    cook = get_physx_cooking_interface()
+    counts: dict[str, int] = {}
+    try:
+        for link in links:
+            link_prim = stage.GetPrimAtPath(root_path.AppendChild(link))
+            sources = [p for p in Usd.PrimRange(link_prim)
+                       if p.IsA(UsdGeom.Mesh) and p.HasAPI(UsdPhysics.MeshCollisionAPI)]
+            if not sources:
+                raise SystemExit(f"[{asset}] {link}: no mesh collider to bake")
+            counts[link] = 0
+            for source in sources:
+                approx = UsdPhysics.MeshCollisionAPI(source).GetApproximationAttr().Get()
+                if approx != "convexDecomposition":
+                    raise SystemExit(f"[{asset}] {source.GetPath()}: approximation {approx}, want convexDecomposition")
+                hulls = _cook_decomposition(cook, cache_id.ToLongInt(), source.GetPath())
+                for i, (vertices, polygons) in enumerate(hulls):
+                    provenance = json.dumps({"source": source.GetName(), "params": params.get(link) or {},
+                                             "hull": i, "of": len(hulls)}, sort_keys=True)
+                    _author_hull(stage, source, i, vertices, _hull_triangles(vertices, polygons), provenance)
+                source.SetActive(False)
+                counts[link] += len(hulls)
+    finally:
+        cache.Erase(cache_id)
+    stage.GetRootLayer().Save()
+    print(f"[{asset}] baked PhysX decomposition into {sum(counts.values())} convexHull meshes on {len(counts)} links")
+    return counts
+
+
+def verify_baked_hulls(usd_path: Path, asset: str, params: dict[str, dict], counts: dict[str, int]) -> None:
+    """No active decomposition collider is left; each baked hull is outward, small enough for PhysX and no sliver."""
+    stage = Usd.Stage.Open(str(usd_path))
+    cache = UsdGeom.XformCache()
+    found: dict[str, int] = {}
+    problems: list[str] = []
+    for prim in Usd.PrimRange.Stage(stage, Usd.TraverseInstanceProxies()):
+        if not prim.HasAPI(UsdPhysics.MeshCollisionAPI):
+            continue
+        path = prim.GetPath().pathString
+        if UsdPhysics.MeshCollisionAPI(prim).GetApproximationAttr().Get() == "convexDecomposition":
+            problems.append(f"{path}: still convexDecomposition")
+        attr = prim.GetAttribute(_BAKED_FROM_ATTR)
+        if not attr or not attr.HasAuthoredValue():
+            continue
+        link = next((l for l in counts if f"/{l}/" in path), None)
+        if link is None:
+            problems.append(f"{path}: baked hull outside the baked links")
+            continue
+        found[link] = found.get(link, 0) + 1
+        if json.loads(attr.Get())["params"] != (params.get(link) or {}):
+            problems.append(f"{path}: recipe {attr.Get()} != manifest {params.get(link) or {}}")
+        mesh = UsdGeom.Mesh(prim)
+        m = np.array(cache.GetLocalToWorldTransform(prim), dtype=np.float64)
+        local = np.array(mesh.GetPointsAttr().Get(), dtype=np.float64)
+        pts = (np.c_[local, np.ones(len(local))] @ m)[:, :3]
+        volume = _signed_volume(pts, mesh.GetFaceVertexCountsAttr().Get(), mesh.GetFaceVertexIndicesAttr().Get())
+        if np.linalg.det(m[:3, :3]) < 0:
+            volume = -volume
+        tri = np.array(mesh.GetFaceVertexIndicesAttr().Get()).reshape(-1, 3)
+        normals = np.cross(pts[tri[:, 1]] - pts[tri[:, 0]], pts[tri[:, 2]] - pts[tri[:, 0]])
+        normals = normals[np.linalg.norm(normals, axis=1) > 0]
+        normals /= np.linalg.norm(normals, axis=1, keepdims=True)
+        proj = pts @ normals.T
+        thickness = float((proj.max(axis=0) - proj.min(axis=0)).min())
+        if len(local) > _HULL_VERTEX_LIMIT:
+            problems.append(f"{path}: {len(local)} vertices > {_HULL_VERTEX_LIMIT}")
+        if volume < _MIN_HULL_VOLUME_M3 or thickness < _MIN_HULL_THICKNESS_M:
+            problems.append(f"{path}: sliver (volume {volume * 1e9:.4g} mm^3, thickness {thickness * 1e3:.4g} mm)")
+    if found != counts:
+        problems.append(f"baked hulls per link {found} != cooked {counts}")
+    if problems:
+        raise SystemExit(f"[{asset}] baked hull check FAILED ({len(problems)}), e.g. {problems[:3]}")
+    print(f"[{asset}] baked hulls ok: {sum(found.values())} hulls, all outward, >= "
+          f"{_MIN_HULL_THICKNESS_M * 1e3:g} mm thick, <= {_HULL_VERTEX_LIMIT} vertices")
 
 
 def _local_xform(prim: Usd.Prim) -> Gf.Matrix4d:
